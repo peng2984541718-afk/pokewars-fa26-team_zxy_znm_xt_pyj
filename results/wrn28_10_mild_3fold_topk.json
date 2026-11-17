@@ -1,0 +1,32 @@
+{
+  "count": 160925,
+  "top1": 0.9318564548702812,
+  "top5": 0.9756594686965978,
+  "top10": 0.9845083113251515,
+  "folds": [
+    {
+      "fold": 0,
+      "count": 54325,
+      "top1": 0.9308421537045559,
+      "top5": 0.9748182236539347,
+      "top10": 0.9845559134836631
+    },
+    {
+      "fold": 1,
+      "count": 53300,
+      "top1": 0.9318386491557223,
+      "top5": 0.976078799249531,
+      "top10": 0.9844465290806754
+    },
+    {
+      "fold": 2,
+      "count": 53300,
+      "top1": 0.9329080675422139,
+      "top5": 0.9760975609756097,
+      "top10": 0.9845215759849906
+    }
+  ],
+  "variant": "mild",
+  "checkpoints": "original/mild best stage2 weights for each held-out fold",
+  "validation": "stratified 3-fold held-out unique images"
+}

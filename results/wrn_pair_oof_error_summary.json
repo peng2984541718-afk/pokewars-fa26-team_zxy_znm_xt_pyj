@@ -1,0 +1,255 @@
+{
+  "samples": 160925,
+  "errors": 10214,
+  "top1_accuracy": 0.9365294391797421,
+  "top10_accuracy": 0.9860929004194501,
+  "error_true_rank": {
+    "rank_2": 3798,
+    "rank_3_to_5": 2824,
+    "rank_6_to_10": 1354,
+    "not_in_top10": 2238
+  },
+  "original_mild_agreement": {
+    "both_correct": 146182,
+    "original_only_correct": 2692,
+    "mild_only_correct": 3770,
+    "both_wrong_same": 4238,
+    "both_wrong_different": 4043
+  },
+  "ensemble_wrong_breakdown": {
+    "both_base_models_correct": 1,
+    "exactly_one_base_model_correct": 2024,
+    "both_wrong_same_prediction": 4238,
+    "both_wrong_different_predictions": 3951
+  },
+  "wrong_confidence": {
+    ">=0.9": 125,
+    ">=0.7": 611,
+    "<0.5": 8450
+  },
+  "hardest_classes": [
+    {
+      "id": 770,
+      "samples": 157,
+      "errors": 89,
+      "error_rate": 0.5668789808917197
+    },
+    {
+      "id": 993,
+      "samples": 157,
+      "errors": 87,
+      "error_rate": 0.554140127388535
+    },
+    {
+      "id": 524,
+      "samples": 157,
+      "errors": 71,
+      "error_rate": 0.45222929936305734
+    },
+    {
+      "id": 99,
+      "samples": 157,
+      "errors": 67,
+      "error_rate": 0.4267515923566879
+    },
+    {
+      "id": 925,
+      "samples": 157,
+      "errors": 61,
+      "error_rate": 0.3885350318471338
+    },
+    {
+      "id": 575,
+      "samples": 157,
+      "errors": 50,
+      "error_rate": 0.3184713375796178
+    },
+    {
+      "id": 236,
+      "samples": 157,
+      "errors": 48,
+      "error_rate": 0.3057324840764331
+    },
+    {
+      "id": 461,
+      "samples": 157,
+      "errors": 48,
+      "error_rate": 0.3057324840764331
+    },
+    {
+      "id": 226,
+      "samples": 157,
+      "errors": 47,
+      "error_rate": 0.29936305732484075
+    },
+    {
+      "id": 590,
+      "samples": 157,
+      "errors": 47,
+      "error_rate": 0.29936305732484075
+    },
+    {
+      "id": 736,
+      "samples": 157,
+      "errors": 46,
+      "error_rate": 0.2929936305732484
+    },
+    {
+      "id": 223,
+      "samples": 157,
+      "errors": 44,
+      "error_rate": 0.2802547770700637
+    },
+    {
+      "id": 237,
+      "samples": 157,
+      "errors": 43,
+      "error_rate": 0.27388535031847133
+    },
+    {
+      "id": 412,
+      "samples": 157,
+      "errors": 42,
+      "error_rate": 0.267515923566879
+    },
+    {
+      "id": 227,
+      "samples": 157,
+      "errors": 42,
+      "error_rate": 0.267515923566879
+    },
+    {
+      "id": 149,
+      "samples": 157,
+      "errors": 40,
+      "error_rate": 0.25477707006369427
+    },
+    {
+      "id": 982,
+      "samples": 157,
+      "errors": 40,
+      "error_rate": 0.25477707006369427
+    },
+    {
+      "id": 611,
+      "samples": 157,
+      "errors": 39,
+      "error_rate": 0.2484076433121019
+    },
+    {
+      "id": 70,
+      "samples": 157,
+      "errors": 39,
+      "error_rate": 0.2484076433121019
+    },
+    {
+      "id": 973,
+      "samples": 157,
+      "errors": 39,
+      "error_rate": 0.2484076433121019
+    }
+  ],
+  "top_directed_confusions": [
+    {
+      "true_id": 524,
+      "pred_id": 237,
+      "count": 59
+    },
+    {
+      "true_id": 770,
+      "pred_id": 993,
+      "count": 58
+    },
+    {
+      "true_id": 993,
+      "pred_id": 770,
+      "count": 50
+    },
+    {
+      "true_id": 925,
+      "pred_id": 590,
+      "count": 41
+    },
+    {
+      "true_id": 590,
+      "pred_id": 925,
+      "count": 34
+    },
+    {
+      "true_id": 237,
+      "pred_id": 524,
+      "count": 31
+    },
+    {
+      "true_id": 99,
+      "pred_id": 770,
+      "count": 28
+    },
+    {
+      "true_id": 99,
+      "pred_id": 993,
+      "count": 23
+    },
+    {
+      "true_id": 119,
+      "pred_id": 706,
+      "count": 17
+    },
+    {
+      "true_id": 706,
+      "pred_id": 119,
+      "count": 16
+    },
+    {
+      "true_id": 993,
+      "pred_id": 99,
+      "count": 13
+    },
+    {
+      "true_id": 149,
+      "pred_id": 993,
+      "count": 13
+    },
+    {
+      "true_id": 724,
+      "pred_id": 13,
+      "count": 11
+    },
+    {
+      "true_id": 461,
+      "pred_id": 738,
+      "count": 9
+    },
+    {
+      "true_id": 770,
+      "pred_id": 99,
+      "count": 9
+    },
+    {
+      "true_id": 728,
+      "pred_id": 255,
+      "count": 8
+    },
+    {
+      "true_id": 63,
+      "pred_id": 993,
+      "count": 8
+    },
+    {
+      "true_id": 307,
+      "pred_id": 462,
+      "count": 7
+    },
+    {
+      "true_id": 638,
+      "pred_id": 463,
+      "count": 7
+    },
+    {
+      "true_id": 993,
+      "pred_id": 63,
+      "count": 7
+    }
+  ],
+  "method": "six-checkpoint ensemble; each validation image predicted only by the original and mild WRN checkpoints for its held-out fold"
+}
