@@ -1,0 +1,19 @@
+{
+  "inputs": [
+    "outputs/large/oof_wrn28_10_rot5.npy",
+    "outputs/large/oof_wrn28_10_mild_rot5.npy",
+    "outputs/large/oof_wrn28_10_mild_pseudo_rot5.npy",
+    "outputs/large/oof_wrn28_10_mild_pseudo_synth_rot5.npy",
+    "outputs/large/oof_wrn28_10_mild_pseudo_ctrl_rot5.npy"
+  ],
+  "weights": [
+    0.125,
+    0.125,
+    0.25,
+    0.25,
+    0.25
+  ],
+  "top1": 0.9485101755476153,
+  "top5": 0.983656983066646,
+  "top20": 0.994233338511729
+}

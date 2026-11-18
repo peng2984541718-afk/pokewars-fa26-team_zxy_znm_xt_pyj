@@ -1,0 +1,68 @@
+{
+  "history": [
+    {
+      "round": 0,
+      "fits": [
+        {
+          "seed": 0,
+          "select_rmse": 0.4708675146102905,
+          "best_epoch": 1452,
+          "seconds": 214.3
+        }
+      ],
+      "test_rmse": 0.4666110873222351
+    },
+    {
+      "round": 1,
+      "fits": [
+        {
+          "seed": 0,
+          "select_rmse": 0.312129944562912,
+          "best_epoch": 1452,
+          "seconds": 505.8
+        }
+      ],
+      "pseudo_battles": 76575,
+      "mean_pseudo_weight": 0.9582927227020264,
+      "test_rmse": 0.3263757526874542
+    },
+    {
+      "round": 2,
+      "fits": [
+        {
+          "seed": 0,
+          "select_rmse": 0.31459054350852966,
+          "best_epoch": 1373,
+          "seconds": 506.0
+        }
+      ],
+      "pseudo_battles": 77250,
+      "mean_pseudo_weight": 0.9666711091995239,
+      "test_rmse": 0.334247887134552
+    }
+  ],
+  "protocol": "train_pair_mlp 80/20 split; test = second half of validation",
+  "config": {
+    "battles": "data/known_battles.npz",
+    "train_csv": "data/train.csv.gz",
+    "priors": "outputs/large/unlabeled_wrn_rot5_top20.csv",
+    "unlabeled_paths": "data/unlabeled_paths.txt",
+    "output": "outputs/large/pair_semi_clean.json",
+    "full": false,
+    "holdout": 0.05,
+    "rounds": 2,
+    "min_weight": 0.5,
+    "dim": 24,
+    "hidden": 1024,
+    "layers": 3,
+    "dropout": 0.3,
+    "lr": 0.002,
+    "weight_decay": 0.01,
+    "epochs": 1500,
+    "patience": 100,
+    "seeds": [
+      0
+    ],
+    "loss": "bce"
+  }
+}

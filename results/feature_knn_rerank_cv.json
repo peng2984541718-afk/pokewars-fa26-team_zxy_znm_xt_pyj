@@ -1,0 +1,51 @@
+{
+  "method": "WRN-28-10 original+mild fold-matched ensemble; \u00b15 degree rotation TTA; top-10 log(CNN probability) + 32 * mean nearest-neighbor cosine similarity",
+  "beta": 32,
+  "beta_selection": "Chosen on fold 0 of original-view OOF; fixed for all rotation-TTA folds",
+  "folds": [
+    {
+      "fold": 0,
+      "count": 54325,
+      "cnn_top1_correct": 51001,
+      "reranked_top1_correct": 51193,
+      "gained": 469,
+      "lost": 277
+    },
+    {
+      "fold": 1,
+      "count": 53300,
+      "cnn_top1_correct": 50010,
+      "reranked_top1_correct": 50264,
+      "gained": 509,
+      "lost": 255
+    },
+    {
+      "fold": 2,
+      "count": 53300,
+      "cnn_top1_correct": 50086,
+      "reranked_top1_correct": 50334,
+      "gained": 498,
+      "lost": 250
+    }
+  ],
+  "overall": {
+    "count": 160925,
+    "cnn_top1_correct": 151097,
+    "cnn_top1_accuracy": 0.9389280720832686,
+    "reranked_top1_correct": 151791,
+    "reranked_top1_accuracy": 0.9432406400497126,
+    "cnn_top5_accuracy": 0.9795246232717104,
+    "reranked_top5_accuracy": 0.9809600745688986,
+    "top10_accuracy": 0.9872611464968153,
+    "gained": 1476,
+    "lost": 782,
+    "changed_top1": 3716
+  },
+  "untuned_folds_1_2": {
+    "count": 106600,
+    "cnn_top1_accuracy": 0.9389868667917448,
+    "reranked_top1_accuracy": 0.9436960600375235,
+    "gained": 1007,
+    "lost": 505
+  }
+}

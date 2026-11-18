@@ -1,0 +1,64 @@
+{
+  "feature_names": [
+    "log_wrn_p",
+    "wrn_rank",
+    "log_wrn_p_over_top1",
+    "wrn_top1_margin",
+    "wrn_top10_mass",
+    "log_conv_p",
+    "log_conv_p_over_top1",
+    "conv_rank_top10",
+    "conv_top1_p",
+    "knn1",
+    "knn5",
+    "prototype",
+    "knn1_vs_best",
+    "simple_fused_score",
+    "log_dense_p",
+    "log_dense_relative",
+    "dense_top1_p",
+    "dense_rank_top10",
+    "candidate_id"
+  ],
+  "model": "LightGBM binary candidate ranker",
+  "folds": [
+    {
+      "fold": 0,
+      "count": 54325,
+      "cnn_top1_correct": 51001,
+      "knn1_top1_correct": 51193,
+      "meta_top1_correct": 51520,
+      "gained_vs_knn1": 602,
+      "lost_vs_knn1": 275,
+      "meta_top10_correct": 53757
+    },
+    {
+      "fold": 1,
+      "count": 53300,
+      "cnn_top1_correct": 50010,
+      "knn1_top1_correct": 50264,
+      "meta_top1_correct": 50603,
+      "gained_vs_knn1": 584,
+      "lost_vs_knn1": 245,
+      "meta_top10_correct": 52732
+    },
+    {
+      "fold": 2,
+      "count": 53300,
+      "cnn_top1_correct": 50086,
+      "knn1_top1_correct": 50334,
+      "meta_top1_correct": 50616,
+      "gained_vs_knn1": 551,
+      "lost_vs_knn1": 269,
+      "meta_top10_correct": 52739
+    }
+  ],
+  "overall": {
+    "count": 160925,
+    "cnn_top1_accuracy": 0.9389280720832686,
+    "knn1_top1_accuracy": 0.9432406400497126,
+    "meta_top1_accuracy": 0.9491315830355755,
+    "meta_top10_accuracy": 0.9894547149293149,
+    "top10_accuracy": 0.9924188286468852
+  }
+}

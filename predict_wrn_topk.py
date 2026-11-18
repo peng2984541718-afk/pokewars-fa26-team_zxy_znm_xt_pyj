@@ -26,6 +26,12 @@ def main() -> None:
                         default=Path("outputs/large/test_wrn28_10_ensemble_80000_top10.csv"))
     parser.add_argument("--limit", type=int, default=80000)
     parser.add_argument("--offset", type=int, default=0)
+    parser.add_argument("--prefixes", nargs="+", default=None,
+                        help="Checkpoint prefixes; overrides --variant")
+    parser.add_argument("--weights", type=float, nargs="+", default=None,
+                        help="Relative weight per prefix (default equal)")
+    parser.add_argument("--folds", type=int, nargs="+", choices=(0, 1, 2), default=[0, 1, 2],
+                        help="Use only checkpoints whose held-out fold is listed")
     parser.add_argument("--variant", choices=("original", "mild", "ensemble"),
                         default="original")
     parser.add_argument("--tta", choices=("none", "rotate_5deg"), default="none")
@@ -50,18 +56,24 @@ def main() -> None:
 
     paths = all_paths[args.offset:args.offset + args.limit]
     probabilities = np.zeros((args.limit, NUM_CLASSES), dtype=np.float32)
-    prefixes = (["wrn28_10"] if args.variant == "original"
+    prefixes = (args.prefixes if args.prefixes
+                else ["wrn28_10"] if args.variant == "original"
                 else ["wrn28_10_mild"] if args.variant == "mild"
                 else ["wrn28_10", "wrn28_10_mild"])
+    weights = args.weights or [1.0] * len(prefixes)
+    if len(weights) != len(prefixes):
+        parser.error("--weights needs one value per prefix")
     checkpoint_paths = [args.checkpoint_dir / f"{prefix}_f{fold}_stage2_best.pt"
-                        for prefix in prefixes for fold in range(3)]
+                        for prefix in prefixes for fold in args.folds]
+    checkpoint_weights = [w / (sum(weights) * len(args.folds))
+                          for w in weights for _ in args.folds]
     for checkpoint_path in checkpoint_paths:
         if not checkpoint_path.is_file():
             raise FileNotFoundError(checkpoint_path)
 
     torch.backends.cudnn.benchmark = True
     torch.set_float32_matmul_precision("high")
-    for checkpoint_path in checkpoint_paths:
+    for checkpoint_path, checkpoint_weight in zip(checkpoint_paths, checkpoint_weights):
         model = make_model("wrn28_10", pretrained=False).cuda().eval()
         model.load_state_dict(torch.load(checkpoint_path, map_location="cpu",
                                          weights_only=True))
@@ -81,8 +93,7 @@ def main() -> None:
                             transformed_logits = model(transform(inputs, view))
                         batch_probs += torch.softmax(transformed_logits.float(), dim=1)
                     batch_probs /= 3
-                probabilities[start:end] += (batch_probs.cpu().numpy() /
-                                             len(checkpoint_paths))
+                probabilities[start:end] += batch_probs.cpu().numpy() * checkpoint_weight
                 if end % 10000 == 0 or end == args.limit:
                     print(f"{checkpoint_path.name}: {end:,}/{args.limit:,}", flush=True)
         del model
@@ -105,8 +116,9 @@ def main() -> None:
                              float(scores.sum())])
     metadata = {"images": args.limit, "offset": args.offset, "top_k": args.top_k,
                 "variant": args.variant, "tta": args.tta,
+                "prefixes": prefixes, "weights": weights,
                 "checkpoints": [str(path) for path in checkpoint_paths],
-                "aggregation": "mean of per-checkpoint softmax distributions",
+                "aggregation": "weighted mean of per-checkpoint softmax distributions",
                 "calibrated": False,
                 "ordering": "slice of sorted unique paths in test_paths.txt"}
     metadata_path = args.output.with_suffix(".json")

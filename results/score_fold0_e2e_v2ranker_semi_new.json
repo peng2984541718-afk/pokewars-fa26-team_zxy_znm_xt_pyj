@@ -1,0 +1,53 @@
+{
+  "pair_model": {
+    "train_csv": "data/train.csv.gz",
+    "ranker_scores": "outputs/large/meta_v2_top20_fold0_scores.npz",
+    "output": "outputs/large/score_fold0_e2e_v2ranker_semi_new.json",
+    "model": "mlp",
+    "dim": 8,
+    "hidden": 512,
+    "layers": 3,
+    "dropout": 0.1,
+    "lr": 0.002,
+    "weight_decay": 0.01,
+    "batch_size": 2048,
+    "epochs": 800,
+    "patience": 60,
+    "loss": "bce",
+    "seeds": [
+      0
+    ],
+    "save_table": "None",
+    "table": "outputs/large/pair_semi_nofold0_new_table_round1.npy"
+  },
+  "fits": [
+    {
+      "table": "outputs/large/pair_semi_nofold0_new_table_round1.npy"
+    }
+  ],
+  "true_ids_test_rmse": 0.28704020380973816,
+  "hard_meta_test_rmse": 1.7742482423782349,
+  "selected_soft": {
+    "gamma": 1.0,
+    "ranker_fraction": 1.0,
+    "hard_mass": 0.0,
+    "tune_rmse": 1.4472769498825073,
+    "test_rmse": 1.460980772972107
+  },
+  "true_ids_test_score": 93.45090716667151,
+  "hard_test_score": 59.51885382436887,
+  "soft_test_score": 66.6663464458642,
+  "test_error_groups": {
+    "both_images_correct": {
+      "count": 9566,
+      "hard_rmse": 0.28939250111579895,
+      "soft_rmse": 0.642318606376648
+    },
+    "at_least_one_image_wrong": {
+      "count": 1005,
+      "hard_rmse": 5.684570789337158,
+      "soft_rmse": 4.303966999053955
+    }
+  },
+  "method": "Same split as evaluate_score_fold0.py; parameters chosen on the first half of fold-0/fold-0 battles, scores on the second half."
+}

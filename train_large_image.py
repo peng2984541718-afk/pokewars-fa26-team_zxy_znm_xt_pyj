@@ -39,13 +39,15 @@ class WideBasic(nn.Module):
 
 
 class WideResNet(nn.Module):
-    """WRN-28-10, with a one-channel input for native 32x32 grayscale images."""
+    """WRN with a one-channel input for native 32x32 grayscale images."""
 
-    def __init__(self, width: int = 10, drop: float = 0.2):
+    def __init__(self, width: int = 10, drop: float = 0.2, depth: int = 28):
         super().__init__()
+        if (depth - 4) % 6:
+            raise ValueError("WideResNet depth must equal 6n + 4")
         channels = [16, 16 * width, 32 * width, 64 * width]
         self.stem = nn.Conv2d(1, channels[0], 3, padding=1, bias=False)
-        blocks = (28 - 4) // 6
+        blocks = (depth - 4) // 6
         self.stages = nn.Sequential(*[
             self._stage(channels[i], channels[i + 1], blocks,
                         1 if i == 0 else 2, drop)
@@ -68,10 +70,10 @@ class WideResNet(nn.Module):
 
 
 def make_model(name: str, pretrained: bool) -> nn.Module:
-    if name == "wrn28_10":
+    if name in ("wrn28_10", "wrn40_10"):
         if pretrained:
             raise ValueError("WRN experiment is trained from scratch")
-        return WideResNet()
+        return WideResNet(depth=28 if name == "wrn28_10" else 40)
     if name == "convnextv2_nano":
         import timm
         # The input is expanded to at least 64x64 below. This retains spatial
@@ -79,6 +81,15 @@ def make_model(name: str, pretrained: bool) -> nn.Module:
         return timm.create_model("convnextv2_nano.fcmae_ft_in1k",
                                  pretrained=pretrained, in_chans=1,
                                  num_classes=NUM_CLASSES, drop_path_rate=0.1)
+    if name == "densenet169_cifar":
+        if pretrained:
+            raise ValueError("CIFAR-stem DenseNet experiment is trained from scratch")
+        import timm
+        model = timm.create_model("densenet169", pretrained=False, in_chans=1,
+                                  num_classes=NUM_CLASSES)
+        model.features.conv0 = nn.Conv2d(1, 64, 3, stride=1, padding=1, bias=False)
+        model.features.pool0 = nn.Identity()
+        return model
     raise ValueError(name)
 
 
@@ -141,7 +152,8 @@ def evaluate(model: nn.Module, images: torch.Tensor, labels: torch.Tensor,
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=("wrn28_10", "convnextv2_nano"), required=True)
+    parser.add_argument("--model", choices=("wrn28_10", "wrn40_10", "convnextv2_nano",
+                                            "densenet169_cifar"), required=True)
     parser.add_argument("--fold", type=int, choices=(0, 1, 2), default=0)
     parser.add_argument("--epochs", type=int, default=40)
     parser.add_argument("--batch-size", type=int, default=128)
@@ -167,6 +179,10 @@ def main() -> None:
     parser.add_argument("--training-seed", type=int, default=None,
                         help="Initialization and batch-order seed; keeps the validation split fixed")
     parser.add_argument("--data-dir", type=Path, default=Path("data"))
+    parser.add_argument("--external-bank", type=Path, default=None,
+                        help="Fold-safe mapped sprite bank produced by build_external_sprite_bank.py")
+    parser.add_argument("--external-fraction", type=float, default=0.0,
+                        help="Fraction of each training batch drawn from the external bank")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/large"))
     parser.add_argument("--run-name", default=None)
     args = parser.parse_args()
@@ -175,6 +191,10 @@ def main() -> None:
         parser.error("Invalid schedule or scale range")
     if args.convnext_size < 64 or args.convnext_size % 32:
         parser.error("--convnext-size must be a multiple of 32 and at least 64")
+    if not 0 <= args.external_fraction < 1:
+        parser.error("--external-fraction must be in [0, 1)")
+    if args.external_fraction and args.external_bank is None:
+        parser.error("--external-bank is required for a positive --external-fraction")
     if not torch.cuda.is_available():
         parser.error("CUDA GPU is required")
     training_seed = args.seed if args.training_seed is None else args.training_seed
@@ -198,6 +218,18 @@ def main() -> None:
     valid_idx = np.flatnonzero(folds == args.fold)
     images = torch.as_tensor(np.asarray(images_np).copy(), device="cuda")
     labels = torch.as_tensor(labels_np, dtype=torch.long, device="cuda")
+    external_images = external_labels = None
+    if args.external_fraction:
+        with np.load(args.external_bank) as bank:
+            external_images_np = bank["images"]
+            external_labels_np = bank["labels"].astype(np.int64)
+        if (external_images_np.ndim != 3 or external_images_np.shape[1:] != (32, 32)
+                or len(external_images_np) != len(external_labels_np)
+                or external_labels_np.min() < 0
+                or external_labels_np.max() >= NUM_CLASSES):
+            raise ValueError("Invalid external bank image shape or labels")
+        external_images = torch.as_tensor(external_images_np, device="cuda")
+        external_labels = torch.as_tensor(external_labels_np, device="cuda")
     model = make_model(args.model, args.pretrained).cuda()
     if args.initial_weights is not None:
         model.load_state_dict(torch.load(args.initial_weights, map_location="cpu",
@@ -217,7 +249,9 @@ def main() -> None:
                    "initial_weights": str(args.initial_weights) if args.initial_weights else None,
                    "run_name": run_name, "effective_learning_rate": peak_lr,
                    "train_images": len(train_idx), "validation_images": len(valid_idx),
-                   "parameters": sum(p.numel() for p in model.parameters())})
+                   "parameters": sum(p.numel() for p in model.parameters()),
+                   "external_images": len(external_images) if external_images is not None else 0,
+                   "external_bank": str(args.external_bank) if args.external_bank else None})
     (args.output_dir / f"{run_name}_config.json").write_text(json.dumps(config, indent=2) + "\n")
     print(f"{run_name}: {len(train_idx)} train, {len(valid_idx)} validation, "
           f"{config['parameters']:,} parameters, GPU={torch.cuda.get_device_name()}", flush=True)
@@ -238,12 +272,20 @@ def main() -> None:
         train_loss = 0.0
         for batch_id, offset in enumerate(range(0, len(order), args.batch_size)):
             index = torch.as_tensor(order[offset:offset + args.batch_size], device="cuda")
-            x = preprocess(images[index])
+            raw = images[index]
+            target = labels[index]
+            if external_images is not None:
+                n_external = round(len(index) * args.external_fraction)
+                if n_external:
+                    external_index = torch.as_tensor(
+                        rng.integers(0, len(external_images), size=n_external), device="cuda")
+                    raw = torch.cat((raw[:-n_external], external_images[external_index]))
+                    target = torch.cat((target[:-n_external], external_labels[external_index]))
+            x = preprocess(raw)
             x = augment(x, args.translate_pixels, args.rotate_degrees,
                         args.scale_min, args.scale_max)
             if args.model == "convnextv2_nano":
                 x = F.interpolate(x, size=args.convnext_size, mode="bilinear", align_corners=False)
-            target = labels[index]
             global_step = (epoch - 1) * steps_per_epoch + batch_id
             lr = lr_at_step(global_step, total_steps, warmup_steps,
                             peak_lr, args.min_learning_rate)
