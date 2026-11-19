@@ -101,6 +101,31 @@ def synthesize(s: torch.Tensor, residual: torch.Tensor, params: torch.Tensor,
     return x.to(torch.uint8)
 
 
+def clean_impulses_gpu(images: torch.Tensor, batch_size: int = 8192) -> torch.Tensor:
+    """Replace exact 25/245 impulse pixels with their 3x3 non-impulse median on GPU.
+
+    Uses replicate padding at borders and falls back to the full 3x3 median if all
+    neighbors are impulses. Operates strictly per-image with no dataset statistics.
+    """
+    out = images.clone()
+    for start in range(0, len(images), batch_size):
+        end = min(start + batch_size, len(images))
+        x = images[start:end].to(torch.float32)
+        mask = (x == IMPULSE_LOW) | (x == IMPULSE_HIGH)
+        if not mask.any():
+            continue
+        padded = torch.nn.functional.pad(x.unsqueeze(1), (1, 1, 1, 1), mode="replicate").squeeze(1)
+        patches = padded.unfold(1, 3, 1).unfold(2, 3, 1).reshape(-1, 32, 32, 9)
+        full_med = patches.median(dim=-1).values
+        # Exclude impulse neighbors via nanmedian so adjacent impulses do not corrupt each other
+        imp_p = (patches == IMPULSE_LOW) | (patches == IMPULSE_HIGH)
+        clean_p = torch.where(imp_p, torch.full_like(patches, float("nan")), patches)
+        valid_med = torch.nanmedian(clean_p, dim=-1).values
+        repaired = torch.where(torch.isnan(valid_med), full_med, valid_med)
+        out[start:end] = torch.where(mask, repaired, x).round().clamp(0, 255).to(images.dtype)
+    return out
+
+
 def laplacian_noise(images: np.ndarray) -> np.ndarray:
     """Immerkaer noise estimate used for the noise bins in the evaluation."""
     from scipy.ndimage import convolve

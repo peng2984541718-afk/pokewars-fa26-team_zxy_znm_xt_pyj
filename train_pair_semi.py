@@ -63,6 +63,8 @@ def main() -> None:
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
     parser.add_argument("--initial-table", type=Path, default=None,
                         help="Use this table as round 0 instead of training one")
+    parser.add_argument("--pseudo-battles", type=Path, default=None,
+                        help="Precomputed constrained-BP battles .npz (a, b, y, weight)")
     args = parser.parse_args()
     args.loss = "bce"
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -108,12 +110,13 @@ def main() -> None:
     eu = index.get_indexer(rows.noisy_image1[unknown])
     ev = index.get_indexer(rows.noisy_image2[unknown])
     uy = rows.result[unknown].to_numpy(np.float32)
-    frame = pd.read_csv(args.priors)
-    if not frame.image_path.equals(pd.Series(index, name="image_path")):
-        raise ValueError("Prior file is not in unlabeled path order")
-    candidates = np.array([json.loads(v) for v in frame.topk_pokemon_ids], dtype=np.int64)
-    prior = np.array([json.loads(v) for v in frame.topk_probabilities], dtype=np.float32)
-    prior /= prior.sum(1, keepdims=True)
+    if args.pseudo_battles is None:
+        frame = pd.read_csv(args.priors)
+        if not frame.image_path.equals(pd.Series(index, name="image_path")):
+            raise ValueError("Prior file is not in unlabeled path order")
+        candidates = np.array([json.loads(v) for v in frame.topk_pokemon_ids], dtype=np.int64)
+        prior = np.array([json.loads(v) for v in frame.topk_probabilities], dtype=np.float32)
+        prior /= prior.sum(1, keepdims=True)
 
     base = {"train": (t(a[train_idx]), t(b[train_idx]), t(y[train_idx])),
             "select": (t(a[select_idx]), t(b[select_idx]), t(y[select_idx]))}
@@ -126,18 +129,31 @@ def main() -> None:
                 "test_rmse": rmse(t(table[a[test_idx], b[test_idx]]), t(y[test_idx]))}]
     print(json.dumps(history[-1]), flush=True)
     for round_id in range(1, args.rounds + 1):
-        posterior = belief_propagation(t(candidates), t(prior), t(eu), t(ev), t(uy),
-                                       t(table, torch.float32), .5, .05, 1.).cpu().numpy()
-        best = posterior.argmax(1)
-        pseudo = candidates[np.arange(len(best)), best]
-        confidence = posterior[np.arange(len(best)), best]
-        weight = confidence[eu] * confidence[ev]
-        keep = weight >= args.min_weight
-        data = {"train": (t(np.r_[a[train_idx], pseudo[eu][keep]]),
-                          t(np.r_[b[train_idx], pseudo[ev][keep]]),
-                          t(np.r_[y[train_idx], uy[keep]]),
-                          t(np.r_[np.ones(len(train_idx), np.float32), weight[keep]])),
-                "select": base["select"]}
+        if args.pseudo_battles is not None:
+            with np.load(args.pseudo_battles) as pb:
+                pa = pb["a"].astype(np.int64)
+                pb_id = pb["b"].astype(np.int64)
+                py_val = pb["y"].astype(np.float32)
+                weight = pb["weight"].astype(np.float32)
+            keep = weight >= args.min_weight
+            data = {"train": (t(np.r_[a[train_idx], pa[keep]]),
+                              t(np.r_[b[train_idx], pb_id[keep]]),
+                              t(np.r_[y[train_idx], py_val[keep]]),
+                              t(np.r_[np.ones(len(train_idx), np.float32), weight[keep]])),
+                    "select": base["select"]}
+        else:
+            posterior = belief_propagation(t(candidates), t(prior), t(eu), t(ev), t(uy),
+                                           t(table, torch.float32), .5, .05, 1.).cpu().numpy()
+            best = posterior.argmax(1)
+            pseudo = candidates[np.arange(len(best)), best]
+            confidence = posterior[np.arange(len(best)), best]
+            weight = confidence[eu] * confidence[ev]
+            keep = weight >= args.min_weight
+            data = {"train": (t(np.r_[a[train_idx], pseudo[eu][keep]]),
+                              t(np.r_[b[train_idx], pseudo[ev][keep]]),
+                              t(np.r_[y[train_idx], uy[keep]]),
+                              t(np.r_[np.ones(len(train_idx), np.float32), weight[keep]])),
+                    "select": base["select"]}
         table, fits = fit_tables(data, args, device, args.seeds)
         np.save(args.output.with_name(f"{args.output.stem}_table_round{round_id}.npy"), table)
         history.append({"round": round_id, "fits": fits,
@@ -145,7 +161,7 @@ def main() -> None:
                         "mean_pseudo_weight": float(weight[keep].mean()),
                         "test_rmse": rmse(t(table[a[test_idx], b[test_idx]]), t(y[test_idx]))})
         print(json.dumps(history[-1]), flush=True)
-    if args.full:
+    if args.full and args.pseudo_battles is None:
         np.savez_compressed(args.output.with_name(f"{args.output.stem}_pseudo_labels.npz"),
                             pseudo_label=pseudo.astype(np.uint16), confidence=confidence,
                             candidates=candidates.astype(np.uint16), posterior=posterior)

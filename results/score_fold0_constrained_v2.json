@@ -1,0 +1,84 @@
+{
+  "calibration_weights": [
+    0.30204430184745407,
+    0.5791089134791585,
+    0.008011516238601064
+  ],
+  "unlabeled_bp_exact67_fraction": 0.4751219512195122,
+  "ablations": {
+    "0_indep_raw_top20": {
+      "tune_score": 66.50292019789717,
+      "test_score": 67.14476110672388,
+      "test_rmse": 1.4400123357772827,
+      "test_both_correct": 0.9087125153722448
+    },
+    "1_indep_calibrated": {
+      "tune_score": 66.64538982967099,
+      "test_score": 67.15854269974801,
+      "test_rmse": 1.439408302307129,
+      "test_both_correct": 0.9088071138019109
+    },
+    "2_known_pair_mask": {
+      "tune_score": 68.59488279087024,
+      "test_score": 69.58941770250347,
+      "test_rmse": 1.3328654766082764,
+      "test_both_correct": 0.9226184845331568
+    },
+    "3_plus_unlabeled_bp_mask": {
+      "tune_score": 70.20383957851462,
+      "test_score": 70.85558082257081,
+      "test_rmse": 1.277370810508728,
+      "test_both_correct": 0.9296187683284457
+    }
+  },
+  "cavity_scale_grid": [
+    {
+      "scale": 0.8,
+      "tune_rmse": 1.2858052253723145,
+      "test_rmse": 1.2641687393188477,
+      "tune_score": 70.66314169661115,
+      "test_score": 71.15679852192854,
+      "test_both_correct": 0.9316999337810993
+    },
+    {
+      "scale": 0.85,
+      "tune_rmse": 1.28279709815979,
+      "test_rmse": 1.261488914489746,
+      "tune_score": 70.73177495462801,
+      "test_score": 71.21794125158767,
+      "test_both_correct": 0.9316053353514332
+    },
+    {
+      "scale": 0.9,
+      "tune_rmse": 1.2822397947311401,
+      "test_rmse": 1.2609925270080566,
+      "tune_score": 70.74449035770436,
+      "test_score": 71.22926679991066,
+      "test_both_correct": 0.9315107369217671
+    },
+    {
+      "scale": 0.95,
+      "tune_rmse": 1.2835023403167725,
+      "test_rmse": 1.2620652914047241,
+      "tune_score": 70.71568419000774,
+      "test_score": 71.2047906689408,
+      "test_both_correct": 0.9315107369217671
+    },
+    {
+      "scale": 1.0,
+      "tune_rmse": 1.286081314086914,
+      "test_rmse": 1.264266848564148,
+      "tune_score": 70.65684247232775,
+      "test_score": 71.15456006701264,
+      "test_both_correct": 0.931416138492101
+    }
+  ],
+  "selected": {
+    "scale": 0.9,
+    "tune_rmse": 1.2822397947311401,
+    "test_rmse": 1.2609925270080566,
+    "tune_score": 70.74449035770436,
+    "test_score": 71.22926679991066,
+    "test_both_correct": 0.9315107369217671
+  }
+}

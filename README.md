@@ -1,98 +1,99 @@
-# Pokéwars: Joint Visual Recognition, Graphical Identity Inference, and Antisymmetric Score Completion
+# Pokéwars: Joint Visual Recognition, Global Cavity Inference, and Antisymmetric Score Completion
 
-Code and validation summaries for the CS 3780 / 5780 competition [The Pokéwar](https://www.kaggle.com/competitions/cs-3780-5780-fa-26-the-pokewar/). Given two noisy $32 \times 32$ grayscale sprites $(x_1, x_2)$, the task is to predict the outcome $y \in [0, 10]$ of a 1,024-round simulation between their latent Pokémon species.
+Code and compact validation summaries for the CS 3780 / 5780 competition [The Pokéwar](https://www.kaggle.com/competitions/cs-3780-5780-fa-26-the-pokewar/). Given two noisy $32 \times 32$ grayscale sprites $(x_1, x_2)$, the task is to predict the outcome $y \in [0, 10]$ of a 1,024-round battle simulation between their latent Pokémon species.
 
-Competition archives, model checkpoints, and per-image prediction arrays are excluded from Git (`.gitignore`); compact cross-validation and ablation summaries are tracked under `results/`.
+Competition archives, model checkpoints, and per-image prediction arrays stay outside Git (`.gitignore`); verified cross-validation and end-to-end evaluation summaries are tracked under `results/`.
 
 ---
 
 ## 1. Problem Formulation and Risk Decomposition
 
-Let $\mathcal{C} = \{1, \dots, 1025\}$ denote the anonymous species set and $\mathcal{X} = \{0, \dots, 255\}^{32 \times 32}$ the space of noisy grayscale sprites. Across the competition files, the data partition into three disjoint image regimes:
+Let $\mathcal{C} = \{1, \dots, 1025\}$ denote the anonymous species set and $\mathcal{X} = \{0, \dots, 255\}^{32 \times 32}$ the space of noisy grayscale sprites. Across the competition files, images partition into three strictly disjoint regimes:
 
-| Split | Battles | Unique images | Species labels | Battle outcome $y$ | Empirical structure |
+| Split | Battles | Unique images | Species labels | Battle outcome $y$ | Empirical combinatorial structure |
 |---|---:|---:|---|---|---|
-| $\mathcal{D}_{\mathrm{lab}}$ (`train.csv`, labeled) | $184{,}800$ | $160{,}925$ | observed $(c_1, c_2)$ | observed | $157$ images per species; distinct unordered pairs |
-| $\mathcal{D}_{\mathrm{unl}}$ (`train.csv`, unlabeled) | $79{,}200$ | $68{,}675$ | latent | observed | $67$ images per species; mean degree $2.31$ |
-| $\mathcal{D}_{\mathrm{test}}$ (`test.csv`) | $80{,}000$ | $160{,}000$ | latent | target | $1$ battle per image; disjoint from $\mathcal{D}_{\mathrm{train}}$ |
+| $\mathcal{D}_{\mathrm{lab}}$ (`train.csv`, labeled) | $184{,}800$ | $160{,}925$ | observed $(c_1, c_2)$ | observed | Exactly $157$ images/species; pairwise distinct unordered pairs |
+| $\mathcal{D}_{\mathrm{unl}}$ (`train.csv`, unlabeled) | $79{,}200$ | $68{,}675$ | latent | observed | Exactly $67$ images/species; mean degree $2.31$; distinct unordered pairs |
+| $\mathcal{D}_{\mathrm{test}}$ (`test.csv`) | $80{,}000$ | $160{,}000$ | latent | target | Degree $1$ per image; disjoint from $\mathcal{D}_{\mathrm{train}}$; distinct unordered pairs |
 
-For an ordered species pair $(a, b) \in \mathcal{C}^2$ with true single-round win probability $p_{ab} \in [0, 1]$, the recorded battle target is the scaled empirical win count
+For an ordered species pair $(a, b) \in \mathcal{C}^2$ ($a \neq b$) with true single-round win probability $p_{ab} \in [0, 1]$, the battle outcome is the scaled empirical win frequency
 
 $$
 y = 10 \cdot \frac{W}{1024}, \qquad W \sim \mathrm{Binomial}(1024, p_{ab}), \qquad p_{ba} = 1 - p_{ab}.
 $$
 
-Even with known identities $(a, b)$, binomial sampling induces an irreducible floor $\mathbb{E}[(y - 10 p_{ab})^2] = \frac{100}{1024}\, p_{ab}(1 - p_{ab})$ (root-mean-square $\approx 0.12$–$0.15$). Predictions $\hat{y}$ are scored on Kaggle by normalized RMSE:
+Predictions $\hat{y}$ are evaluated by normalized RMSE:
 
 $$
 \mathrm{Score}(\hat{y}, y) = 100 \left(1 - \frac{\mathrm{RMSE}(\hat{y}, y)}{D}\right), \qquad D = 4.382900214041612.
 $$
 
-### Bayes-Optimal Prediction under Identity Uncertainty
+### Bayes-Optimal Prediction and Conditional MSE Audit
 
-Let $T \in [0, 10]^{1025 \times 1025}$ denote an estimate of the conditional expectation $T_{ab} = 10\, p_{ab}$, and let $q(c_1, c_2 \mid x_1, x_2)$ be the posterior distribution over latent species given the two images. Under squared-error loss, the pointwise risk-minimizing predictor is the posterior expectation rather than the argmax plug-in $T_{\hat{c}_1, \hat{c}_2}$:
-
-$$
-\hat{y}_{\mathrm{soft}}(x_1, x_2)
-= \mathbb{E}_{(c_1, c_2) \sim q(\cdot \mid x_1, x_2)}\!\left[T_{c_1, c_2}\right]
-\approx \sum_{c_1 \in \mathcal{K}(x_1)} \sum_{c_2 \in \mathcal{K}(x_2)} q_1(c_1 \mid x_1)\, q_2(c_2 \mid x_2)\, T_{c_1, c_2},
-$$
-
-where $\mathcal{K}(x)$ is the top-$K$ ($K = 20$) candidate set retained per image. Decomposing MSE by the event $E = \{(\hat{c}_1, \hat{c}_2) = (c_1, c_2)\}$ explains why both visual accuracy and posterior expectation are decisive:
+Given an estimated win-score matrix $T \in [0, 10]^{1025 \times 1025}$ ($T_{ab} \approx 10 p_{ab}$) and a joint posterior $Q_e(c_1, c_2)$ over the candidate Cartesian product $\mathcal{K}(x_{e,1}) \times \mathcal{K}(x_{e,2})$ for battle $e$, the squared-error risk minimizer is the posterior expectation
 
 $$
-\mathrm{MSE} = \mathbb{P}(E)\,\mathbb{E}\!\left[(\hat{y} - y)^2 \mid E\right] + \big(1 - \mathbb{P}(E)\big)\,\mathbb{E}\!\left[(\hat{y} - y)^2 \mid E^c\right].
+\hat{y}_e = \sum_{c_1 \in \mathcal{K}(x_{e,1})} \sum_{c_2 \in \mathcal{K}(x_{e,2})} Q_e(c_1, c_2)\, T_{c_1, c_2}.
 $$
 
-On held-out fold-0 battles (`results/score_fold0_e2e_newranker_semi_old.json`), battles with at least one misclassified sprite comprise only $1 - \mathbb{P}(E) = 9.89\%$ of pairs ($1{,}045 / 10{,}571$), yet exhibit hard-plug-in conditional RMSE $5.53$ versus $0.281$ when both sprites are correct—accounting for $>95\%$ of hard-prediction MSE. Marginalizing over top-20 posteriors reduces conditional RMSE on $E^c$ from $5.53$ to $4.28$, lifting the end-to-end score by $+6.39$ points without changing any model weights.
+Decomposing fold-0 test MSE across three mutually exclusive events at the `73.50 LB` checkpoint (`results/score_fold0_constrained_v2.json`, $\mathrm{MSE} = 1.590$, $\mathrm{Score} = 71.23$) identifies the remaining bottlenecks:
+
+| Error regime (Fold-0 held-out battles) | Battle share | Conditional RMSE | MSE contribution | Share of total MSE |
+|---|---:|---:|---:|---:|
+| Both top-1 correct — table floor ($T_{a,b}$ oracle) | $93.15\%$ | $0.296$ | $0.0814$ | $5.1\%$ |
+| Both top-1 correct — posterior uncertainty hedge | $93.15\%$ | — | $0.2730$ | $17.2\%$ |
+| True pair inside top-20 pool, but top-1 wrong | $5.90\%$ | $4.201$ | $1.0417$ | $65.5\%$ |
+| At least one true species missing from top-20 pool | $0.95\%$ | $4.529$ | $0.1941$ | $12.2\%$ |
+
+Reliability checks confirm that post-cavity posteriors are well-calibrated ($\mathbb{E}[w_{\max}] = 0.9955$ vs. empirical accuracy $0.9966$ for $w_{\max} \ge 0.95$; $0.601$ vs. $0.603$ for $w_{\max} \in [0.5, 0.7)$), so post-hoc sharpening degrades MSE. All remaining score gains must come from (i) expanding candidate pool recall, (ii) raising visual/ranking accuracy on noisy sprites, and (iii) tightening global combinatorial constraints.
 
 ---
 
-## 2. Visual Recognition and Candidate Reranking
+## 2. Multi-Backbone Visual Recognition & Deep-Feature kNN
 
-### Fold Protocol
+### Fold Protocol and Input Standardization
 
-All $160{,}925$ labeled sprites are partitioned by unique image path into $3$ class-stratified folds (`stratified_folds` in `image_experiment.py`, seed $3780$). Every backbone, kNN feature bank, pseudo-label bank, and gradient-boosted ranker for fold $f \in \{0, 1, 2\}$ is fit strictly on folds $\{0, 1, 2\} \setminus \{f\}$.
-
-### Architectures, Standardization, and TTA
-
-Each raw image $x \in [0, 255]^{32 \times 32}$ is normalized per instance to stabilize contrast drift across noise levels:
+All $160{,}925$ labeled sprites are split by unique image path into $3$ class-stratified folds (`stratified_folds`, seed $3780$). Every backbone, pseudo-label bank, kNN gallery, and ranker for fold $f$ is fit strictly outside fold $f$. Each image is standardized per instance via
 
 $$
 \tilde{x} = \frac{x / 255 - \mu(x)}{\max(\sigma(x),\, 0.08)}.
 $$
 
-Three architecture families are trained on $\mathcal{D}_{\mathrm{lab}}$ (`train_large_image.py`, `train_large_image_external.py`) using AdamW, label smoothing $\alpha = 0.03$, gradient clipping ($\|\nabla\|_2 \le 1$), on-the-fly affine jitter, and a two-stage cosine schedule ($40$ epochs from $8 \times 10^{-4}$, followed by continuation from $10^{-4}$ to $10^{-7}$):
+Four architecture families are trained (`train_large_image.py`, `train_large_image_external.py`) with AdamW, label smoothing $\alpha = 0.03$, on-the-fly affine jitter, and two-stage cosine schedules:
 
-1. **Native $32 \times 32$ `WideResNet-28-10`** ($37.1\text{M}$ parameters, single-channel $3 \times 3$ stride-$1$ stem, trained under two augmentation regimes: `wrn28_10` and milder `wrn28_10_mild`, plus semi-supervised and noise-augmented continuations).
-2. **`ConvNeXt V2 Nano`** (bicubic upsampling to $64 \times 64$ to preserve spatial resolution at stride $32$).
-3. **CIFAR-stem `DenseNet-169`** ($3 \times 3$ stride-$1$ stem with initial pooling removed).
+1. **Native $32 \times 32$ `WideResNet-28-10`** ($37.1\text{M}$ params): trained across five fold-safe prefixes (`wrn28_10`, `wrn28_10_mild`, `wrn28_10_mild_pseudo`, `wrn28_10_mild_pseudo_synth`, `wrn28_10_mild_pseudo_ctrl`), producing a 15-checkpoint weighted ensemble.
+2. **Native $32 \times 32$ `WideResNet-40-10`**: deeper residual backbone ($93.35\%$ OOF top-1 with $\pm 5^\circ$ TTA).
+3. **CIFAR-stem `DenseNet-169`**: $3 \times 3$ stride-$1$ stem without initial pooling ($93.75\%$ OOF top-1 with $\pm 5^\circ$ TTA).
+4. **`ConvNeXt V2 Nano`**: bicubic $64 \times 64$ input preserving spatial resolution at stride $32$.
 
-At inference, WRN logits are converted to probabilities and averaged across deterministic rotation test-time augmentation $\Theta = \{-5^\circ, 0^\circ, +5^\circ\}$:
+All four backbones are evaluated under deterministic rotation TTA $\Theta = \{-5^\circ, 0^\circ, +5^\circ\}$ (`export_probs_rot5.py`):
 
 $$
 p_{\mathrm{tta}}(c \mid x) = \frac{1}{|\Theta|} \sum_{\theta \in \Theta} \mathrm{softmax}\!\left(z(R_\theta \tilde{x})\right)_c.
 $$
 
-### Deep-Feature kNN Gallery and Multi-Architecture Candidate Ranker
+### Expanded $\pm 5^\circ$ kNN Gallery and Noise-Aware Listwise Ranking (`Phase 1`)
 
-For each WRN checkpoint trained outside fold $f$, penultimate global-pooled features $u(x) = \phi(x) / \|\phi(x)\|_2 \in \mathbb{S}^{639}$ are extracted over its training gallery $\mathcal{G}_{\setminus f}$. For each candidate $c \in \mathcal{K}(x)$ in the WRN top-20 pool (`feature_rerank.py`), we compute:
+To eliminate missing-pool penalties, `extract_gallery_features_v2.py` forms a top-$K$ ($K = 40$) candidate pool $\mathcal{K}(x)$ from the four-backbone probability blend (`0.60 WRN-28 + 0.12 WRN-40 + 0.16 DenseNet-169 + 0.12 ConvNeXt V2`), raising OOF pool recall from $99.42\%$ ($K=20$) to **$99.74\%$** ($K=40$). Penultimate embeddings are averaged across $\Theta$ before $\ell_2$-normalization,
 
 $$
-s_{\mathrm{knn1}}(x, c) = \max_{i \in \mathcal{G}_{\setminus f, c}} u(x)^\top u(x_i), \qquad
-s_{\mathrm{knn5}}(x, c) = \frac{1}{5} \sum_{i \in \mathcal{N}_5(x, c)} u(x)^\top u(x_i), \qquad
-s_{\mathrm{proto}}(x, c) = u(x)^\top \bar{u}_c.
+u(x) = \frac{\sum_{\theta \in \Theta} \phi(R_\theta \tilde{x}) / \|\phi(R_\theta \tilde{x})\|_2}{\left\|\sum_{\theta \in \Theta} \phi(R_\theta \tilde{x}) / \|\phi(R_\theta \tilde{x})\|_2\right\|_2},
 $$
 
-A cross-fitted LightGBM binary classifier (`evaluate_meta_rerank.py`, `predict_meta_top20_test.py`) scores all $20$ candidates per image using $19$ features combining log-probabilities, rank indicators, and margins from WRN, ConvNeXt V2, and DenseNet-169 together with $(s_{\mathrm{knn1}}, s_{\mathrm{knn5}}, s_{\mathrm{proto}})$ and the categorical species index $c$.
+and scored against a variable-size gallery $\mathcal{G}_{\setminus f}$ augmented with fold-safe high-confidence pseudo-labeled images to produce `knn1`, `knn5`, `knn15`, class prototype, and SNR-weighted clean prototype similarities alongside per-image physical degradation statistics (Immerkaer Laplacian noise $\hat{\sigma}_{\mathrm{lap}}$, foreground–background contrast $b - f$, Gaussian $\hat{\sigma}$, and impulse rate).
+
+In `train_listwise_ranker.py`, two complementary rankers score all $K = 40$ candidates using these $45$ features:
+
+1. **Permutation-Equivariant DeepSets Ranker (`ListwiseSetRanker`)**: maps candidate features + species embedding to $h_{ik}$, concatenates global candidate-set context $[h_{ik} \,\|\, \max_j h_{ij} \,\|\, \mathrm{mean}_j h_{ij}]$, and minimizes exact $K$-way multiclass cross-entropy over $\mathcal{K}(x_i)$.
+2. **Noise-Aware LightGBM Ranker**: 300-tree gradient-boosted candidate scorer with categorical species index.
+
+An OOF multiclass NLL calibrator blends both rankers with the 4-backbone log-probability, reaching **$95.59\%$** 3-fold OOF top-1 (`results/phase1_ranker_cv.json`).
 
 ---
 
-## 3. Antisymmetric Binomial Pair Model (`PairMLP`)
+## 3. Antisymmetric Binomial Matrix Completion (`PairMLP`)
 
-Because each unordered species pair $\{a, b\}$ appears at most once in $\mathcal{D}_{\mathrm{lab}}$ ($184{,}800$ observed pairs out of $\binom{1025}{2} = 524{,}800$, density $35.2\%$), estimating $T \in [0, 10]^{1025 \times 1025}$ is a structured matrix-completion problem. Low-rank bilinear or Bradley–Terry parameterizations underfit nontransitive type interactions (rock-paper-scissors cycles across elemental types).
-
-In `train_pair_mlp.py`, each species $a \in \mathcal{C}$ is represented by an embedding $e_a \in \mathbb{R}^d$ ($d = 24$), mapped through a 3-layer SiLU/BatchNorm/Dropout MLP $g_\theta : \mathbb{R}^{3d} \to \mathbb{R}$:
+In `train_pair_mlp.py`, each species $a \in \mathcal{C}$ has an embedding $e_a \in \mathbb{R}^{24}$ passed through a 3-layer SiLU/BatchNorm/Dropout MLP $g_\theta : \mathbb{R}^{72} \to \mathbb{R}$:
 
 $$
 h_\theta(a, b) = g_\theta\!\left([e_a \,\|\, e_b \,\|\, e_a \odot e_b]\right), \qquad
@@ -100,62 +101,64 @@ h_\theta(a, b) = g_\theta\!\left([e_a \,\|\, e_b \,\|\, e_a \odot e_b]\right), \
 T_\theta(a, b) = 10\,\sigma\!\left(\ell_\theta(a, b)\right).
 $$
 
-By construction, $\ell_\theta(b, a) = -\ell_\theta(a, b)$, which enforces exact skew-symmetry $T_\theta(a, b) + T_\theta(b, a) = 10$ and $T_\theta(a, a) = 5$ for all $\theta$. Because $y / 10$ is an empirical binomial proportion, $\theta$ is trained by minimizing weighted binary cross-entropy with random orientation flipping $(a, b, y) \mapsto (b, a, 10 - y)$:
+Exact skew-symmetry $\ell_\theta(b, a) = -\ell_\theta(a, b)$ guarantees $T_\theta(a, b) + T_\theta(b, a) = 10$ identically. Training minimizes weighted binomial cross-entropy with random orientation flipping $(a, b, y) \mapsto (b, a, 10 - y)$:
 
 $$
 \mathcal{L}_{\mathrm{BCE}}(\theta) = -\sum_{(a, b, y, w)} w \left[\frac{y}{10} \log \sigma(\ell_\theta(a, b)) + \left(1 - \frac{y}{10}\right) \log\big(1 - \sigma(\ell_\theta(a, b))\big)\right].
 $$
 
-Switching from factorized bilinear regression to `PairMLP` trained with $\mathcal{L}_{\mathrm{BCE}}$ reduces held-out known-ID RMSE from $\approx 0.90$ to $0.371$ (and to $0.250$ after adding graphical pseudo-battles below).
+---
+
+## 4. Global Unordered-Pair Exclusivity & Bidirectional Cavity Inference
+
+### Combinatorial Exclusivity Law
+
+Across all $\binom{1025}{2} = 524{,}800$ unordered species pairs $\{a, b\}$ ($a \neq b$):
+
+- Every unordered pair appears **at most once** across the entire competition (`184,800` known pairs have $0$ unordered collisions; `79,200` unlabeled battles collide on $<0.004\%$ of pairs).
+- Thus $\mathcal{D}_{\mathrm{lab}} \cup \mathcal{D}_{\mathrm{unl}}$ already exhausts $264{,}000 / 524{,}800 = \mathbf{50.3\%}$ of all unordered pairs, and $\mathcal{D}_{\mathrm{test}}$ internally exhausts another **$15.2\%$**—excluding **$65.5\%$** of candidate pairings for any ambiguous test battle.
+
+### Constrained Loopy BP on $\mathcal{D}_{\mathrm{unl}}$ + Bidirectional Bethe Cavity (`constrained_inference.py`, `joint_constrained_inference.py`)
+
+For each battle $e = (u, v)$ with candidate sets $\mathcal{K}_u, \mathcal{K}_v$, let $P_e(\{a, b\}) = \sum_{(i, j): \{c_{ui}, c_{vj}\} = \{a, b\}} Q_e(i, j)$ denote the unordered-pair probability assigned by battle $e$ (merging reversed orientations $(a, b)$ and $(b, a)$ within the same battle to prevent self-inhibition). Under the Bethe approximation to the global all-different factor $\prod_{\{a,b\}} \mathbb{I}\!\left[\sum_e \mathbb{I}[e = \{a,b\}] \le 1\right]$, the log-availability message received by battle $e$ for pair $\{a, b\}$ from all *other* battles is
+
+$$
+\Lambda_{-e}(\{a, b\})
+= \log A_{\mathrm{known}}(\{a, b\})
++ \sum_{e' \neq e} \log\!\Big(1 - P_{e'}(\{a, b\})\Big),
+$$
+
+where $A_{\mathrm{known}}(\{a, b\}) = 0$ if $a = b$ or $\{a, b\} \in \mathcal{D}_{\mathrm{lab}}$, and $1$ otherwise.
+
+1. **Bayes Class-Prior Debiasing**: before applying the uniform pair-availability factor, classifier class-frequency skew is divided out via $\tilde{q}(c \mid x) \propto q(c \mid x) / \bar{q}(c)$.
+2. **Constrained BP on $\mathcal{D}_{\mathrm{unl}}$**: combines the Gaussian–uniform battle factor $\psi_{uv}(c_1, c_2; y_{uv}) = (1-\varepsilon)\mathcal{N}(y_{uv}; T_{c_1, c_2}, \sigma^2) + \varepsilon/10$ ($\sigma = 0.5, \varepsilon = 0.05$), the known-pair mask $A_{\mathrm{known}}$, Sinkhorn dual multipliers $\beta_c \leftarrow \beta_c + \tfrac{1}{2}\log(67 / \sum_u b_u(c))$ enforcing the exact $67$ images/species cardinality of $\mathcal{D}_{\mathrm{unl}}$, and internal unordered-pair cavity messages $\Lambda_{-e}$.
+3. **Bidirectional Coupling ($\mathcal{D}_{\mathrm{unl}} \leftrightarrow \mathcal{D}_{\mathrm{test}}$)**: two outer rounds alternate constrained BP on the $79{,}200$ unlabeled battles (conditioned on $\Lambda_{\mathrm{test}}$) with damped Bethe cavity updates on the $80{,}000$ test battles (conditioned on $A_{\mathrm{known}}$ and $\Lambda_{\mathrm{unl}}$):
+
+$$
+Q_e^{(t+1)}(i, j) \propto \tilde{q}_u(c_{ui})\, \tilde{q}_v(c_{vj})\, \exp\!\big(\Lambda_{-e}^{(t)}(\{c_{ui}, c_{vj}\})\big).
+$$
+
+On `test.csv`, this raises unlabeled BP exact-67 species recovery to **$67.9\%$** (mean edge confidence **$99.54\%$**, $79{,}193 / 79{,}200$ unique unordered pairs) and yields **$79{,}917 / 80{,}000$** unique top-1 test pairs with $0$ collisions against $\mathcal{D}_{\mathrm{lab}}$ (`results/submission_phase1_fastattack.json`). On the leak-free fold-0 benchmark, global cavity inference lifts end-to-end score by **$+4.56$ to $+5.32$ points** ($66.67 \to 71.23 \to 71.99$), driving the Kaggle Public LB from **$68.21 \to 73.50$** (and further improvements ready in `submission_phase1_fastattack.csv`).
 
 ---
 
-## 4. Graphical Identity Inference and Semi-Supervised Co-Training
+## 5. Exact Physical Impulse Discovery (`25 / 245`) & Transductive Phase 2
 
-### Loopy Belief Propagation on $\mathcal{D}_{\mathrm{unl}}$
+Full 0–255 intensity-histogram inspection across all three splits revealed that sprite corruption consists of contrast attenuation, additive Gaussian noise (right-clipped at $255$), and **exact discrete impulse spikes at intensities $25$ ($20.8\times$ local density) and $245$ ($3.9\times$ local density)** with identical rates across splits:
 
-The $79{,}200$ unlabeled training rows form a factor graph $\mathcal{G} = (\mathcal{V}_{\mathrm{unl}}, \mathcal{E}_{\mathrm{unl}})$ over $|\mathcal{V}_{\mathrm{unl}}| = 68{,}675$ unlabeled sprites, where each edge $(u, v) \in \mathcal{E}_{\mathrm{unl}}$ carries an observed battle score $y_{uv} \in [0, 10]$ (mean node degree $2 |\mathcal{E}_{\mathrm{unl}}| / |\mathcal{V}_{\mathrm{unl}}| = 2.307$). Restricting each node $u$ to its top-$K$ ($K = 20$) visual candidates $\mathcal{K}_u$, the joint posterior over latent assignments $\mathbf{c} = (c_u)_{u \in \mathcal{V}_{\mathrm{unl}}}$ factorizes as
+| Split | $[24, \mathbf{25}, 26]$ per $10^4$ px | $[244, \mathbf{245}, 246]$ per $10^4$ px |
+|---|---|---|
+| `labeled` | $[3.6,\ \mathbf{77.8},\ 4.3]$ | $[27.3,\ \mathbf{99.4},\ 24.4]$ |
+| `unlabeled` | $[3.3,\ \mathbf{78.1},\ 3.9]$ | $[27.4,\ \mathbf{100.1},\ 24.5]$ |
+| `test` | $[3.4,\ \mathbf{78.2},\ 3.9]$ | $[27.5,\ \mathbf{101.0},\ 24.8]$ |
 
-$$
-P(\mathbf{c} \mid \mathbf{x}, \mathbf{y}) \propto \prod_{u \in \mathcal{V}_{\mathrm{unl}}} \psi_u(c_u) \prod_{(u, v) \in \mathcal{E}_{\mathrm{unl}}} \psi_{uv}(c_u, c_v;\, y_{uv}),
-$$
+Replacing pixels satisfying $x_{ij} \in \{25, 245\}$ with their $3 \times 3$ non-impulse neighborhood median (`clean_impulses_gpu` in `degradation.py`, strictly per-image with zero dataset leakage) produces an immediate **zero-training** gain on an existing fold-0 `WRN-28-10` checkpoint (single view, no TTA):
 
-with unary visual prior $\psi_u(c) = p_{\mathrm{img}}(c \mid x_u)^\gamma$ and outlier-robust Gaussian-uniform pairwise likelihood (`joint_identity_inference.py`):
+- Raw image: `94.227%` overall / `87.170%` on the noisiest $20\%$ deciles
+- Exact `25/245` $3 \times 3$ median repair: **`94.559%` (`+0.332%`)** overall / **`87.925%` (`+0.755%`)** on the noisiest $20\%$
+- `0.3 raw + 0.7 repaired`: **`94.594%` (`+0.367%`)** overall / **`88.017%` (`+0.847%`)** on the noisiest $20\%$
 
-$$
-\psi_{uv}(c_1, c_2;\, y_{uv}) = (1 - \varepsilon)\,\frac{1}{\sqrt{2\pi}\sigma} \exp\!\left(-\frac{(y_{uv} - T_{c_1, c_2})^2}{2\sigma^2}\right) + \frac{\varepsilon}{10},
-$$
-
-using $(\sigma, \varepsilon, \gamma) = (0.5, 0.05, 1.0)$. Damped sum-product message passing in log-domain ($\lambda = 0.5$, $20$ iterations) updates directed edge messages according to
-
-$$
-\tilde{m}_{u \to v}^{(t)}(c_v) \propto \sum_{c_u \in \mathcal{K}_u} \psi_{uv}(c_u, c_v;\, y_{uv})\,\psi_u(c_u) \prod_{w \in \mathcal{N}(u) \setminus \{v\}} m_{w \to u}^{(t-1)}(c_u),
-\qquad
-\log m_{u \to v}^{(t)} = (1 - \lambda)\log m_{u \to v}^{(t-1)} + \lambda \log \tilde{m}_{u \to v}^{(t)}.
-$$
-
-On a leak-free fold-0 simulation (`results/joint_identity_sim.json`, $54{,}325$ fold-0 images and $21{,}141$ fold-0/fold-0 battles scored with `pair_table_no_fold0.npy`), belief propagation lifts top-1 accuracy from $94.00\%$ to $95.44\%$ overall, scaling monotonically with battle degree: $94.12\%$ (deg $0$), $96.03\%$ (deg $1$), $96.91\%$ (deg $2$), and $98.09\%$ (deg $\ge 3$).
-
-### Closed-Loop Semi-Supervised Co-Training
-
-Belief propagation beliefs $b_u(c_u) \propto \psi_u(c_u) \prod_{v \in \mathcal{N}(u)} m_{v \to u}(c_u)$ drive two coupled semi-supervised updates:
-
-1. **Semi-supervised score completion (`train_pair_semi.py`).** Setting $\hat{c}_u = \arg\max_c b_u(c)$ and confidence $\hat{\pi}_u = b_u(\hat{c}_u)$, unlabeled battles with joint confidence $w_{uv} = \hat{\pi}_u \hat{\pi}_v \ge 0.5$ ($77{,}549 / 79{,}200$ battles, mean weight $0.975$) are appended to $\mathcal{D}_{\mathrm{lab}}$ with loss weight $w_{uv}$. On the strict 80/20 holdout protocol (`results/pair_semi_clean.json`), one round reduces held-out `PairMLP` RMSE from $0.4666 \to 0.3264$; on the fold-0 end-to-end split, true-ID score rises from $89.39 \to 93.61$.
-2. **Fold-safe semi-supervised WRN training (`build_pseudo_label_bank.py`, `run_pseudo_wrn_queue.sh`).** To prevent indirect validation leakage, fold $f$'s unlabeled bank is generated exclusively from fold-$f$ WRN checkpoints (trained without fold-$f$ images). Unlabeled sprites with $\hat{\pi}_u \ge 0.90$ ($\approx 63{,}280$ images per fold) are mixed into each training mini-batch at fraction $\rho_{\mathrm{ext}} = 0.35$, producing `wrn28_10_mild_pseudo_f{0,1,2}_stage2_best.pt`. Combining out-of-fold probabilities with weights $(0.25, 0.25, 0.50)$ across `(wrn28_10, wrn28_10_mild, wrn28_10_mild_pseudo)` raises WRN OOF top-1 from $93.89\% \to 94.61\%$ (`results/multibackbone_wrn_pseudo_rot5_oof.json`) and LightGBM ranker OOF top-1 from $94.91\% \to 95.25\%$ (`results/meta_rerank_pseudo_top20_cv.json`). This pipeline produced the **68.21380** Kaggle leaderboard submission (`run_pseudo_ensemble_queue.sh`).
-
----
-
-## 5. Parametric Degradation Modeling and 15-Checkpoint Continuation (`v2`)
-
-Stratifying validation accuracy by Immerkaer's Laplacian noise estimator $\hat{\sigma}_{\mathrm{lap}}(x)$ reveals that the cleanest $40\%$ of sprites already achieve $99.3\%$–$99.7\%$ top-1 accuracy, whereas $89\%$ of classification errors lie in the noisier half (`results/synth_pilot_noise_bins.json`). Pixel-level inspection shows a structured degradation process (`degradation.py`):
-
-$$
-x_{\mathrm{clean}} \;\mapsto\; x_0 = \mathrm{clip}\!\left(\mathrm{round}\big(b - (b - f)\, s(x_{\mathrm{clean}}) + \sigma_{\mathrm{add}}\,\eta\big),\, 0, 255\right), \qquad \eta \sim \mathcal{N}(0, I),
-$$
-
-followed by discrete impulse corruption that overwrites pixels with exact intensities $25$ (rate $p_{\mathrm{low}}$) and $245$ (rate $p_{\mathrm{high}}$), alongside positive coupling between noise severity and sprite scale/translation. `build_degradation_data.py` extracts fold-safe clean silhouette maps $s \in [0, 1]^{32 \times 32}$ and empirically estimated 5-tuples $(b, f, \sigma_{\mathrm{add}}, p_{\mathrm{low}}, p_{\mathrm{high}})$ from noisy training images.
-
-Fine-tuning all three folds under both 50% on-the-fly re-degradation (`wrn28_10_mild_pseudo_synth`) and matched continuation (`wrn28_10_mild_pseudo_ctrl`) yields a 5-prefix, 15-checkpoint WRN ensemble (`run_synth_all_folds_queue.sh`) with weights $(1, 1, 2, 2, 2)$, reaching **94.85%** WRN OOF top-1 ($99.42\%$ top-20 recall, `results/multibackbone_wrn_v2_rot5_oof.json`), **95.43%** LightGBM ranker OOF top-1 (`results/meta_rerank_v2_top20_cv.json`), and **66.67** on the held-out fold-0 end-to-end benchmark (`results/score_fold0_e2e_v2ranker_semi_new.json`).
+`run_phase2_impulse_hammer.sh` combines this exact impulse repair (`--clean-impulses`) with strictly fold-safe ~195k-image transductive banks (`build_fold_transductive_banks.py`, combining high-confidence unlabeled and test sprites from bidirectional cavity inference) to upgrade all four backbones (`DenseNet-169`, `ConvNeXt V2`, `WRN-40-10`, `WRN-28-10`) across all $3$ folds.
 
 ---
 
@@ -163,75 +166,57 @@ Fine-tuning all three folds under both 50% on-the-fly re-degradation (`wrn28_10_
 
 ### Image Recognition Cross-Validation ($160{,}925$ Held-Out Labeled Sprites)
 
-| Stage | Tracked summary | OOF Top-1 | OOF Top-5 | Candidate Pool Recall |
-|---|---|---:|---:|---:|
-| Small contrastive CNN (local M4 baseline) | `outputs/image_shift1_20e_cv.json` | $68.42\%$ | $84.41\%$ | — |
-| `WRN-28-10` (stage 2, single view) | `results/wrn28_10_3fold_topk.json` | $92.51\%$ | $97.20\%$ | $98.19\%$ (top-10) |
-| `WRN-28-10` mild augmentation | `results/wrn28_10_mild_3fold_topk.json` | $93.19\%$ | $97.57\%$ | $98.45\%$ (top-10) |
-| 6-WRN ensemble (`orig + mild`) + $\pm 5^\circ$ TTA | `results/wrn_pair_tta_cv.json` | $93.89\%$ | $97.95\%$ | $98.73\%$ (top-10) |
-| + Fold-safe penultimate kNN-1 reranking | `results/feature_knn_rerank_cv.json` | $94.32\%$ | $98.10\%$ | $98.73\%$ (top-10) |
-| + 3-backbone (`WRN + ConvNeXtV2 + DenseNet169`) LightGBM ranker | `results/meta_rerank_three_arch_top20_cv.json` | $94.91\%$ | — | $99.24\%$ (top-20) |
-| 9-WRN ensemble with BP pseudo-labels (`o + m + 2p`, $\pm 5^\circ$ TTA) | `results/multibackbone_wrn_pseudo_rot5_oof.json` | $94.61\%$ | $98.22\%$ | $99.35\%$ (top-20) |
-| + Rebuilt kNN & 3-backbone LightGBM ranker (**68.21 LB**) | `results/meta_rerank_pseudo_top20_cv.json` | $95.25\%$ | — | $99.35\%$ (top-20) |
-| 15-WRN ensemble (`o + m + 2p + 2synth + 2ctrl`, $\pm 5^\circ$ TTA) | `results/multibackbone_wrn_v2_rot5_oof.json` | $94.85\%$ | $98.37\%$ | $99.42\%$ (top-20) |
-| + Rebuilt 15-WRN kNN & 3-backbone LightGBM ranker (`v2`) | `results/meta_rerank_v2_top20_cv.json` | **$95.43\%$** | — | **$99.42\%$** (top-20) |
+| Stage | Tracked summary | OOF Top-1 | Candidate Pool Recall |
+|---|---|---:|---:|
+| Small contrastive CNN (local baseline) | `outputs/image_shift1_20e_cv.json` | $68.42\%$ | — |
+| `WRN-28-10` + mild ensemble + $\pm 5^\circ$ TTA (6 ckpts) | `results/wrn_pair_tta_cv.json` | $93.89\%$ | $98.73\%$ (top-10) |
+| + 3-arch (`WRN + ConvNeXtV2 + DenseNet`) LightGBM ranker | `results/meta_rerank_three_arch_top20_cv.json` | $94.91\%$ | $99.24\%$ (top-20) |
+| 9-WRN BP pseudo-label ensemble (`o + m + 2p`) + rebuilt ranker | `results/meta_rerank_pseudo_top20_cv.json` | $95.25\%$ | $99.35\%$ (top-20) |
+| 15-WRN continuation ensemble (`v2`) + rebuilt ranker | `results/meta_rerank_v2_top20_cv.json` | $95.43\%$ | $99.42\%$ (top-20) |
+| **4-backbone rot5 `top-40` + expanded kNN + Listwise DeepSets/LGB (`Phase 1`)** | `results/phase1_ranker_cv.json` | **$95.59\%$** | **$99.74\%$ (top-40)** |
 
 ### End-to-End Battle Score Progression
 
-Fold-0 end-to-end evaluations strictly hold out all battles where both sprites belong to image fold 0 (`evaluate_score_fold0_mlp.py`: ranker fit on folds $1 + 2$; score table fit without fold-0/fold-0 pairs; first half used for hyperparameter selection, second half reported).
+Fold-0 end-to-end scores strictly hold out all fold-0/fold-0 battles (rankers fit on folds $1 + 2$; score tables exclude fold-0/fold-0 battles; hyperparameters selected on tune half, metrics reported on test half).
 
-| Pipeline configuration | True-ID Score | Hard Top-1 Score | Soft Expected Score (Fold 0) | Kaggle Public LB |
-|---|---:|---:|---:|---:|
+| Pipeline configuration | Tracked summary | Fold-0 Both-Correct | Fold-0 Soft Score | Kaggle Public LB |
+|---|---|---:|---:|---:|
 | Earlier baseline submission | — | — | — | $58.90425$ |
-| 6-WRN 3-arch ranker + supervised `PairMLP` (`score_fold0_mlp_soft_v2.json`) | $89.39$ | $57.15$ | $64.20$ | — |
-| + Semi-supervised `PairMLP` (`score_fold0_e2e_oldranker_semi_old.json`) | $93.61$ | $57.77$ | $65.13$ | — |
-| + 9-WRN pseudo-label ensemble & rebuilt ranker (`score_fold0_e2e_newranker_semi_old.json`) | $93.61$ | $59.89$ | $66.28$ | **$68.21380$** |
-| + 15-WRN synth/ctrl continuation & `v2` ranker (`score_fold0_e2e_v2ranker_semi_new.json`) | $93.45$ | $59.52$ | **$66.67$** | *(ready: `submission_v2_ensemble.csv`)* |
+| 6-WRN 3-arch ranker + supervised `PairMLP` | `results/score_fold0_mlp_soft_v2.json` | — | $64.20$ | — |
+| + Semi-supervised `PairMLP` | `results/score_fold0_e2e_oldranker_semi_old.json` | — | $65.13$ | — |
+| + 9-WRN pseudo-label ensemble & ranker | `results/score_fold0_e2e_newranker_semi_old.json` | $90.11\%$ | $66.28$ | $68.21380$ |
+| + 15-WRN `v2` ranker (independent soft) | `results/score_fold0_e2e_v2ranker_semi_new.json` | $90.87\%$ | $66.67$ | — |
+| + Global unordered-pair exclusivity & Bethe cavity (`top-20`) | `results/score_fold0_constrained_v2.json` | $93.15\%$ | $71.23$ | **$73.50$** |
+| **+ 4-backbone `top-40` + Listwise DeepSets + bidirectional cavity (`Phase 1`)** | `results/score_fold0_phase1_fastattack.json` | **$93.53\%$** | **$71.99$** | *(ready: `submission_phase1_fastattack.csv`)* |
 
 ---
 
 ## 7. Reproducing the Pipeline
 
-### Environment and Data Cache
+Install dependencies (`pip install -r requirements_large.txt -r requirements_rerank.txt`) and cache labeled/unlabeled $32 \times 32$ arrays (`image_experiment.py`, `cache_unlabeled_images.py`).
 
-Place the competition archive at `data/competition.zip` and install dependencies (`pip install -r requirements_large.txt -r requirements_rerank.txt`). Cache the labeled, unlabeled, and test $32 \times 32$ arrays:
-
-```bash
-python image_experiment.py --fold 0 --epochs 1 --run-name cache_only
-python cache_unlabeled_images.py
-```
-
-### Core Execution Queues
-
-1. **Multi-backbone training (`WRN-28-10`, `ConvNeXt V2 Nano`, `DenseNet-169`):**
+1. **Base backbones & BP semi-supervised `WRN-28-10` + `PairMLP`:**
    ```bash
-   python train_large_image.py --model wrn28_10 --fold 0 --epochs 40
-   ./run_wrn_mild_queue.sh
-   ```
-2. **Initial supervised & semi-supervised `PairMLP` and fold-safe pseudo-label WRN training:**
-   ```bash
-   python train_pair_mlp.py --loss bce --epochs 1500 --patience 100
-   python predict_score_submission.py --output outputs/large/submission_pair_mlp.csv
-   ./run_pseudo_wrn_queue.sh
-   python export_wrn_oof_probs.py --prefix wrn28_10_mild_pseudo \
-     --output outputs/large/oof_wrn28_10_mild_pseudo_rot5.npy
-   ```
-3. **Rebuild OOF priors, BP semi-supervised pair tables, kNN features, LightGBM ranker, and 68.21 LB submission:**
-   ```bash
+   PYTHON_BIN=python3 ./run_pseudo_wrn_queue.sh
    PYTHON_BIN=python3 ./run_pseudo_ensemble_queue.sh
-   ```
-4. **Parametric noise-degradation continuations across all 3 folds and `v2` ensemble submission:**
-   ```bash
    PYTHON_BIN=python3 ./run_synth_all_folds_queue.sh
+   ```
+2. **Global constrained Bethe cavity inference (`73.50 LB`):**
+   ```bash
+   PYTHON_BIN=python3 ./run_constrained_v3_queue.sh
+   ```
+3. **Phase 1 Fast Attack (`71.99` Fold-0 / `95.59%` OOF) & Phase 2 Impulse-Repaired Hammer:**
+   ```bash
+   PYTHON_BIN=python3 ./run_fast_and_hammer_queue.sh
+   PYTHON_BIN=python3 ./run_phase2_impulse_hammer.sh
    ```
 
 ---
 
 ## 8. Key Repository Modules
 
-- `train_large_image.py`, `train_large_image_external.py`: 3-fold training for `WRN-28-10`, `WRN-40-10`, `ConvNeXt V2 Nano`, and CIFAR-stem `DenseNet-169` with external pseudo-label banks and on-the-fly parametric noise synthesis.
-- `degradation.py`, `build_degradation_data.py`, `check_degradation_realism.py`, `evaluate_noise_bins.py`: silhouette extraction, 5-parameter noise/impulse estimation, CNN discriminator realism audit, and noise-decile evaluation.
-- `export_wrn_oof_probs.py`, `combine_oof_probs.py`, `predict_wrn_topk.py`: $\pm 5^\circ$ TTA probability export and weighted multi-prefix ensembling.
-- `feature_rerank.py`, `predict_test_top20_features.py`, `evaluate_meta_rerank.py`, `export_ranker_fold0_scores.py`, `predict_meta_top20_test.py`: fold-safe penultimate kNN/prototype galleries and cross-fitted LightGBM candidate ranker.
-- `train_pair_mlp.py`, `train_pair_semi.py`, `joint_identity_inference.py`, `build_pseudo_label_bank.py`: antisymmetric `PairMLP`, damped log-domain loopy belief propagation on the unlabeled battle graph, and semi-supervised pair/image bank generation.
-- `evaluate_score_fold0_mlp.py`, `predict_score_submission.py`: leak-free fold-0 end-to-end score evaluation and posterior-expectation test submission generator.
+- `train_large_image.py`, `train_large_image_external.py`: 3-fold training for `WRN-28-10`, `WRN-40-10`, `ConvNeXt V2 Nano`, and CIFAR-stem `DenseNet-169` with external/transductive banks and `--clean-impulses` physical impulse repair.
+- `degradation.py`, `build_degradation_data.py`, `check_degradation_realism.py`, `evaluate_noise_bins.py`: physical degradation estimation, GPU $3 \times 3$ non-impulse median repair (`clean_impulses_gpu`), realism audit, and noise-decile evaluation.
+- `export_probs_rot5.py`, `extract_gallery_features_v2.py`, `train_listwise_ranker.py`: 4-backbone $\pm 5^\circ$ TTA probability export, top-40 variable-gallery kNN/prototype extraction, and permutation-equivariant DeepSets + LightGBM listwise ranking.
+- `train_pair_mlp.py`, `train_pair_semi.py`, `joint_identity_inference.py`: antisymmetric binomial `PairMLP` and unlabeled battle-graph BP.
+- `constrained_inference.py`, `joint_constrained_inference.py`, `build_fold_transductive_banks.py`: global unordered-pair exclusivity, Sinkhorn cardinality-constrained BP, bidirectional $\mathcal{D}_{\mathrm{unl}} \leftrightarrow \mathcal{D}_{\mathrm{test}}$ Bethe cavity inference, and fold-safe transductive bank builder.

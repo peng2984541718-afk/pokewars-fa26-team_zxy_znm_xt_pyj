@@ -19,6 +19,8 @@ from train_large_image import make_model
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=Path("."))
+    parser.add_argument("--query-dir", type=Path, default=None,
+                        help="Directory with test_paths.txt and test_32x32.npy (defaults to --data-dir)")
     parser.add_argument("--checkpoint-dir", type=Path, default=Path("outputs/large"))
     parser.add_argument("--candidates", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -26,11 +28,13 @@ def main() -> None:
     parser.add_argument("--neighbor-batch-size", type=int, default=64)
     parser.add_argument("--prefixes", nargs="+", default=["wrn28_10", "wrn28_10_mild"],
                         help="Must match the prefixes used by feature_rerank.py")
+    parser.add_argument("--folds", type=int, nargs="+", choices=(0, 1, 2), default=[0, 1, 2])
     args = parser.parse_args()
     if not torch.cuda.is_available():
         parser.error("CUDA GPU required")
-    paths = (args.data_dir / "test_paths.txt").read_text().splitlines()
-    test_cache = np.load(args.data_dir / "test_32x32.npy", mmap_mode="r")
+    query_dir = args.query_dir or args.data_dir
+    paths = (query_dir / "test_paths.txt").read_text().splitlines()
+    test_cache = np.load(query_dir / "test_32x32.npy", mmap_mode="r")
     train_cache = np.load(args.data_dir / "labeled_32x32.npy", mmap_mode="r")
     labels = np.load(args.data_dir / "labeled_ids.npy").astype(np.int64)
     if len(paths) != len(test_cache) or len(labels) != len(train_cache):
@@ -43,15 +47,15 @@ def main() -> None:
                 raise ValueError(f"Test path mismatch at row {i}")
             ids[i] = json.loads(row["topk_pokemon_ids"])
             wrn_probs[i] = json.loads(row["topk_probabilities"])
-    if i + 1 != len(paths) or len(paths) != 160000 or np.any(ids < 1) or np.any(ids > 1025):
-        raise ValueError("Incomplete or invalid test candidate file")
+    if i + 1 != len(paths) or len(paths) == 0 or np.any(ids < 1) or np.any(ids > 1025):
+        raise ValueError("Incomplete or invalid candidate file")
     folds = stratified_folds(labels, 3, SEED)
     train_images = torch.as_tensor(np.asarray(train_cache).copy(), device="cuda")
     test_images = torch.as_tensor(np.asarray(test_cache).copy(), device="cuda")
     query_indices = np.arange(len(paths))
     scores = {name: np.zeros(ids.shape, dtype=np.float32)
               for name in ("knn1", "knn5", "prototype")}
-    for fold in range(3):
+    for fold in args.folds:
         gallery_indices = np.flatnonzero(folds != fold)
         for prefix in args.prefixes:
             checkpoint = args.checkpoint_dir / f"{prefix}_f{fold}_stage2_best.pt"
@@ -65,7 +69,7 @@ def main() -> None:
                                    labels[gallery_indices], ids-1,
                                    args.neighbor_batch_size)
             for name in scores:
-                scores[name] += one[name] / (3 * len(args.prefixes))
+                scores[name] += one[name] / (len(args.folds) * len(args.prefixes))
             del model, gallery_features, query_features, one
             torch.cuda.empty_cache()
             print(f"Scored {checkpoint.name}", flush=True)

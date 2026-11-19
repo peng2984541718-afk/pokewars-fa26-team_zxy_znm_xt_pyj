@@ -72,12 +72,18 @@ def features(z, conv_full: np.ndarray, dense_full: np.ndarray) -> np.ndarray:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir", type=Path, default=Path("."))
+    parser.add_argument("--query-dir", type=Path, default=None,
+                        help="Directory containing test_paths.txt (defaults to --data-dir)")
     parser.add_argument("--input-dir", type=Path, default=Path("outputs/large"))
     parser.add_argument("--output", type=Path, default=Path(
         "outputs/large/test_meta_three_arch_top20_160000_top10.csv"))
     parser.add_argument("--run-name", default="feature_rerank_rot5_top20",
                         help="Prefix of the fold-safe OOF feature files")
     parser.add_argument("--test-features", default="test_wrn_rot5_top20_features.npz")
+    parser.add_argument("--conv-probs", default="test_convnextv2_probs.npy")
+    parser.add_argument("--dense-probs", default="test_densenet169_probs.npy")
+    parser.add_argument("--save-top20-npz", type=Path, default=None,
+                        help="Optional .npz saving all 20 ranked candidates, scores, and WRN probs")
     parser.add_argument("--cv-report", default="meta_rerank_three_arch_top20_cv.json",
                         help="evaluate_meta_rerank.py output for these features")
     args = parser.parse_args()
@@ -105,16 +111,26 @@ def main() -> None:
               categorical_feature=[len(FEATURE_NAMES)-1])
     del x, y
     print("Trained final candidate ranker", flush=True)
-    paths = (args.data_dir / "test_paths.txt").read_text().splitlines()
+    query_dir = args.query_dir or args.data_dir
+    paths = (query_dir / "test_paths.txt").read_text().splitlines()
     with np.load(folder / args.test_features) as z:
         ids = z["candidates"].astype(np.int64)
         wrn = z["cnn_probs"].astype(np.float32)
-        if ids.shape != (len(paths), 20) or len(paths) != 160000:
-            raise ValueError("Test feature count mismatch")
-        conv = np.load(folder / "test_convnextv2_probs.npy", mmap_mode="r")
-        dense = np.load(folder / "test_densenet169_probs.npy", mmap_mode="r")
+        if ids.shape != (len(paths), 20) or len(paths) == 0:
+            raise ValueError("Query feature count mismatch")
+        conv = np.load(folder / args.conv_probs, mmap_mode="r")
+        dense = np.load(folder / args.dense_probs, mmap_mode="r")
         scores = model.predict_proba(features(z, conv, dense))[:, 1].reshape(-1, 20)
-    order = np.argsort(-scores, axis=1)[:, :10]
+    full_order = np.argsort(-scores, axis=1)
+    if args.save_top20_npz is not None:
+        args.save_top20_npz.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(
+            args.save_top20_npz,
+            candidates=np.take_along_axis(ids, full_order, axis=1).astype(np.uint16),
+            ranker_scores=np.take_along_axis(scores, full_order, axis=1).astype(np.float32),
+            wrn_probs=np.take_along_axis(wrn, full_order, axis=1).astype(np.float32),
+        )
+    order = full_order[:, :10]
     top_ids = np.take_along_axis(ids, order, axis=1)
     top_scores = np.take_along_axis(scores, order, axis=1)
     top_wrn = np.take_along_axis(wrn, order, axis=1)

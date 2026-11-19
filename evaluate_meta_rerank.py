@@ -36,6 +36,7 @@ def main() -> None:
     targets = []
     row_labels = []
     candidates = []
+    wrn_list = []
     fold_ids = []
     baseline = []
     indices_list = []
@@ -94,6 +95,7 @@ def main() -> None:
         targets.append((ids == labels[indices, None]).reshape(-1).astype(np.uint8))
         row_labels.append(labels[indices])
         candidates.append(ids)
+        wrn_list.append(wrn)
         fold_ids.append(np.full(len(indices), fold, dtype=np.int8))
         baseline.append(ids[np.arange(len(ids)), (log_wrn + 32*knn1).argmax(1)])
         indices_list.append(indices)
@@ -101,12 +103,14 @@ def main() -> None:
     y = np.concatenate(targets)
     true = np.concatenate(row_labels)
     ids = np.concatenate(candidates)
+    all_wrn = np.concatenate(wrn_list)
     fold_ids = np.concatenate(fold_ids)
     base = np.concatenate(baseline)
     all_indices = np.concatenate(indices_list)
     output = {"feature_names": feature_names, "model": "LightGBM binary candidate ranker",
               "folds": []}
     all_pred = np.empty_like(base)
+    all_scores = np.empty_like(all_wrn, dtype=np.float32)
     all_top10_hit = np.zeros(len(base), dtype=bool)
     for fold in range(3):
         train_rows = fold_ids != fold
@@ -120,6 +124,7 @@ def main() -> None:
         model.fit(x[train_candidate], y[train_candidate], feature_name=feature_names,
                   categorical_feature=[len(feature_names)-1] if args.class_feature else "auto")
         scores = model.predict_proba(x[np.repeat(valid_rows, candidate_count)])[:, 1].reshape(-1, candidate_count)
+        all_scores[valid_rows] = scores
         predicted = ids[valid_rows][np.arange(valid_rows.sum()), scores.argmax(1)]
         all_pred[valid_rows] = predicted
         selected_top10 = np.take_along_axis(ids[valid_rows],
@@ -147,8 +152,10 @@ def main() -> None:
     if args.save_predictions is not None:
         args.save_predictions.parent.mkdir(parents=True, exist_ok=True)
         np.savez_compressed(args.save_predictions, indices=all_indices,
-                            labels=true, candidates=ids, cnn_top1=ids[:, 0],
-                            knn_top1=base, meta_top1=all_pred,
+                            labels=true, candidates=ids.astype(np.uint16),
+                            wrn_probs=all_wrn.astype(np.float16),
+                            ranker_scores=all_scores.astype(np.float16),
+                            cnn_top1=ids[:, 0], knn_top1=base, meta_top1=all_pred,
                             meta_top10_hit=all_top10_hit, folds=fold_ids)
     print(f"Saved {args.output}", flush=True)
 

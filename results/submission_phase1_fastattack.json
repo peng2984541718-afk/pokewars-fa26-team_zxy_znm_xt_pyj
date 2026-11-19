@@ -1,0 +1,17 @@
+{
+  "rows": 80000,
+  "candidate_k": 40,
+  "scale": 0.95,
+  "unlabeled_bp": {
+    "exact67_fraction": 0.6790243902439025,
+    "count_min": 63,
+    "count_max": 70,
+    "unique_unordered_pairs": 79193,
+    "mean_edge_confidence": 0.9954113364219666
+  },
+  "test_diagnostics": {
+    "unique_top1_unordered_pairs": 79917,
+    "prediction_mean": 4.98022985458374,
+    "prediction_std": 4.2086029052734375
+  }
+}

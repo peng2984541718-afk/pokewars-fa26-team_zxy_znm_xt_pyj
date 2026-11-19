@@ -18,7 +18,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from degradation import synthesize, transform_silhouettes
+from degradation import clean_impulses_gpu, synthesize, transform_silhouettes
 from image_experiment import NUM_CLASSES, SEED, labeled_images, stratified_folds
 
 
@@ -191,6 +191,8 @@ def main() -> None:
     parser.add_argument("--synthetic-scale", type=float, nargs=2, default=[1.0, 1.25])
     parser.add_argument("--synthetic-shift-sd", type=float, default=3.2)
     parser.add_argument("--synthetic-degrees", type=float, default=15.0)
+    parser.add_argument("--clean-impulses", action="store_true",
+                        help="Repair exact 25/245 impulse pixels with 3x3 non-impulse median")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/large"))
     parser.add_argument("--run-name", default=None)
     args = parser.parse_args()
@@ -229,6 +231,8 @@ def main() -> None:
     train_idx = np.flatnonzero(folds != args.fold)
     valid_idx = np.flatnonzero(folds == args.fold)
     images = torch.as_tensor(np.asarray(images_np).copy(), device="cuda")
+    if args.clean_impulses:
+        images = clean_impulses_gpu(images)
     labels = torch.as_tensor(labels_np, dtype=torch.long, device="cuda")
     external_images = external_labels = None
     if args.external_fraction:
@@ -241,6 +245,8 @@ def main() -> None:
                 or external_labels_np.max() >= NUM_CLASSES):
             raise ValueError("Invalid external bank image shape or labels")
         external_images = torch.as_tensor(external_images_np, device="cuda")
+        if args.clean_impulses:
+            external_images = clean_impulses_gpu(external_images)
         external_labels = torch.as_tensor(external_labels_np, device="cuda")
     synthetic = None
     if args.synthetic_fraction:

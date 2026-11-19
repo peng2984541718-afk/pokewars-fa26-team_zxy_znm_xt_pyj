@@ -1,0 +1,27 @@
+{
+  "rows": 80000,
+  "table": "outputs/large/pair_semi_v2_full_table_round1.npy",
+  "test_npz": "outputs/large/test_meta_v2_top20.npz",
+  "unlabeled_priors": "outputs/large/unlabeled_meta_v2_top20.npz",
+  "calibration_weights": [
+    0.2615463517583796,
+    0.6042535023631752,
+    0.042271836582933445
+  ],
+  "scale": 0.9,
+  "debias": 1.0,
+  "cavity_iters": 12,
+  "unlabeled_bp": {
+    "exact67_fraction": 0.5882926829268292,
+    "count_min": 62,
+    "count_max": 71,
+    "unique_unordered_pairs": 79191,
+    "mean_edge_confidence": 0.9929555058479309
+  },
+  "test_diagnostics": {
+    "unique_top1_unordered_pairs": 79898,
+    "collisions_with_known_battles": 0,
+    "prediction_mean": 4.981915473937988,
+    "prediction_std": 4.2000532150268555
+  }
+}
