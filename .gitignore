@@ -1,0 +1,33 @@
+# Python & virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Competition data, caches & large artifacts
+data/
+unl/
+outputs/
+logs/
+cuda_extra/
+debs/
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+*.csv
+*.csv.gz
+*.zip
+*.bin
+*.uploading
+test_paths.txt
+
+# Local transfer helper with Tailscale IPs
+upload_server.py
+
+# Editor / OS
+.DS_Store
+.vscode/
+.cursor/
