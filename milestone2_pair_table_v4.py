@@ -219,7 +219,7 @@ def fit_kfold_ensemble(lab_a: np.ndarray, lab_b: np.ndarray, lab_y: np.ndarray,
 
     acc_table = np.zeros((1026, 1026), dtype=np.float64)
     logs: list[dict] = []
-    n_models = 0
+    weight_sum = 0.0
 
     for fold in range(n_folds):
         val_m = fold_ids == fold
@@ -239,16 +239,17 @@ def fit_kfold_ensemble(lab_a: np.ndarray, lab_b: np.ndarray, lab_y: np.ndarray,
         vy = torch.as_tensor(lab_y[val_m], device=device, dtype=torch.float32)
 
         for arch_idx, (arch_name, factory) in enumerate((
-            ("mlp_wide", lambda: PairMLPWide(dim=48, hidden=1024, layers=3, dropout=0.25)),
-            ("bilin_res", lambda: PairBilinearResidual(rank=48, dim=32, hidden=768, dropout=0.25)),
+            ("mlp_wide3", lambda: PairMLPWide(dim=48, hidden=1024, layers=3, dropout=0.25)),
+            ("mlp_deep4", lambda: PairMLPWide(dim=36, hidden=1280, layers=4, dropout=0.25)),
         )):
             t0 = time.monotonic()
             torch.manual_seed(seed_base + fold * 17 + arch_idx * 101)
             model = factory().to(device)
             val_r, best_ep = fit_one_model(model, ta, tb, ty, tw, va, vb, vy)
             tab = materialise_table(model, device)
-            acc_table += tab
-            n_models += 1
+            w_m = 1.0 / (max(val_r, 0.15) ** 2)
+            acc_table += w_m * tab
+            weight_sum += w_m
             rec = {
                 "fold": fold, "arch": arch_name, "val_rmse": round(val_r, 5),
                 "best_epoch": best_ep, "seconds": round(time.monotonic() - t0, 1),
@@ -259,7 +260,7 @@ def fit_kfold_ensemble(lab_a: np.ndarray, lab_b: np.ndarray, lab_y: np.ndarray,
             del model
             torch.cuda.empty_cache()
 
-    mean_table = (acc_table / n_models).astype(np.float32)
+    mean_table = (acc_table / weight_sum).astype(np.float32)
     return mean_table, logs
 
 
