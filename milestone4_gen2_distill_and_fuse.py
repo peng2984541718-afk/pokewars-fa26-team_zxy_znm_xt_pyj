@@ -180,12 +180,22 @@ def main() -> None:
 
     with np.load(L / "rx_ranker_unlabeled_f0only.npz") as uz:
         u_cand = uz["candidates"].astype(np.int64)
-        u_base_post = uz["posteriors"].astype(np.float32)
+        u_base_raw = uz["posteriors"].astype(np.float32)
     with np.load(L / "rx_ranker_fold0_scores.npz") as fz:
         v_idx = fz["valid_indices"].astype(np.int64)
         cand = fz["candidates"].astype(np.int64)
-        q_base_post = fz["posteriors"].astype(np.float32)
+        q_base_raw = fz["posteriors"].astype(np.float32)
         oop = fz["oop_mass"].astype(np.float32)
+
+    # Inject Discovery #1: orthogonal 64x64 7x7 ConvNeXtV2-Nano prior
+    conv_q = (0.67 * gather_cand(np.load(L / "oof_conv_p2imp.npy", mmap_mode="r"), cand, rows=v_idx)
+              + 0.33 * gather_cand(np.load(L / "oof_conv_face.npy", mmap_mode="r"), cand, rows=v_idx))
+    conv_q = conv_q / np.maximum(conv_q.sum(1, keepdims=True), 1e-8)
+    conv_u = (0.67 * gather_cand(np.load(L / "unl_conv_p2imp.npy", mmap_mode="r"), u_cand)
+              + 0.33 * gather_cand(np.load(L / "unl_conv_face.npy", mmap_mode="r"), u_cand))
+    conv_u = conv_u / np.maximum(conv_u.sum(1, keepdims=True), 1e-8)
+    q_base_post = fuse_posteriors(q_base_raw, conv_q, 0.09, "log", 0.85)
+    u_base_post = fuse_posteriors(u_base_raw, conv_u, 0.09, "log", 0.85)
 
     z_lap_f0 = z_lap_from_gallery(L / "gallery_rx_top40_f0.npz", v_idx)
     pos = np.full(len(paths), -1, dtype=np.int32)
@@ -313,19 +323,32 @@ def main() -> None:
             t_base = tz["posteriors"].astype(np.float32)
             t_oop = tz["oop_mass"].astype(np.float32)
 
+        rx_unl = (0.714 * gather_cand(np.load(L / "unl_resnext29_distill.npy", mmap_mode="r"), tu_cand)
+                  + 0.286 * gather_cand(np.load(L / "unl_resnext29_dist.npy", mmap_mode="r"), tu_cand))
+        rx_test = (0.714 * gather_cand(np.load(L / "test_resnext29_distill.npy", mmap_mode="r"), t_cand)
+                   + 0.286 * gather_cand(np.load(L / "test_resnext29_dist.npy", mmap_mode="r"), t_cand))
         tu_stu = blend_gathered([
-            gather_cand(np.load(L / "unl_resnext29_dist.npy", mmap_mode="r"), tu_cand),
+            rx_unl,
             gather_cand(np.load(L / "unl_dense_gen2.npy", mmap_mode="r"), tu_cand),
             gather_cand(np.load(L / "unl_wrn40_gen2.npy", mmap_mode="r"), tu_cand),
         ], ratio)
         t_stu = blend_gathered([
-            gather_cand(np.load(L / "test_resnext29_dist.npy", mmap_mode="r"), t_cand),
+            rx_test,
             gather_cand(np.load(L / "test_dense_gen2.npy", mmap_mode="r"), t_cand),
             gather_cand(np.load(L / "test_wrn40_gen2.npy", mmap_mode="r"), t_cand),
         ], ratio)
 
-        tu_pri = fuse_posteriors(tu_base, tu_stu, alpha, "log", temp)
-        t_post_raw = fuse_posteriors(t_base, t_stu, alpha, "log", temp)
+        tu_conv = (0.67 * gather_cand(np.load(L / "unl_conv_p2imp.npy", mmap_mode="r"), tu_cand)
+                   + 0.33 * gather_cand(np.load(L / "unl_conv_face.npy", mmap_mode="r"), tu_cand))
+        tu_conv = tu_conv / np.maximum(tu_conv.sum(1, keepdims=True), 1e-8)
+        t_conv = (0.67 * gather_cand(np.load(L / "test_conv_p2imp.npy", mmap_mode="r"), t_cand)
+                  + 0.33 * gather_cand(np.load(L / "test_conv_face.npy", mmap_mode="r"), t_cand))
+        t_conv = t_conv / np.maximum(t_conv.sum(1, keepdims=True), 1e-8)
+
+        tu_base_c = fuse_posteriors(tu_base, tu_conv, 0.09, "log", 0.85)
+        t_base_c = fuse_posteriors(t_base, t_conv, 0.09, "log", 0.85)
+        tu_pri = fuse_posteriors(tu_base_c, tu_stu, alpha, "log", temp)
+        t_post_raw = fuse_posteriors(t_base_c, t_stu, alpha, "log", temp)
 
         np.savez_compressed(L / "rx_v4_unlabeled.npz",
                             candidates=tu_cand.astype(np.uint16),

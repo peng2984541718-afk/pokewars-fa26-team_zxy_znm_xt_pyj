@@ -24,6 +24,7 @@ BP_KERNELS = (
     (0.35, 0.45),
     (0.28, 0.55),
     (0.22, 0.65),
+    (0.18, 0.35),  # matched to PairMLP v4 0.175 RMSE + 2048-Bernoulli floor
 )
 SCALE_BASES = (0.85, 0.90, 0.95, 1.00, 1.05, 1.10)
 BETA_LAPS = (0.00, 0.05, 0.10, 0.16, 0.22)
